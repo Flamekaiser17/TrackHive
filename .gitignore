@@ -1,0 +1,42 @@
+# --- Backend (Python/Django) ---
+backend/venv/
+backend/.env
+backend/*.log
+backend/celerybeat-schedule
+backend/logs/
+backend/__pycache__/
+backend/*/__pycache__/
+backend/*/*/__pycache__/
+backend/*.pyc
+backend/db.sqlite3
+backend/media/
+backend/staticfiles/
+
+# --- Frontend (React/Vite) ---
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# --- Docker ---
+.docker/
+
+# --- IDEs/Editors ---
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# --- Logs/Temp ---
+web_logs.txt
+test_double_assignment.py
+locustfile.py (Exclude if you want to keep performance tests)
+*.log
