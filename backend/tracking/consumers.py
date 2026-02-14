@@ -1,0 +1,132 @@
+import json
+import logging
+from channels.generic.websocket import AsyncWebsocketConsumer
+from channels.db import database_sync_to_async
+from django.contrib.auth import get_user_model
+
+logger = logging.getLogger('trackhive.tracking')
+
+class TrackingConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.user = self.scope["user"]
+        
+        if self.user.is_anonymous:
+            await self.close()
+            return
+
+        if self.user.role == 'admin':
+            await self.channel_layer.group_add("admins", self.channel_name)
+            
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        if hasattr(self, 'user') and self.user.role == 'admin':
+            await self.channel_layer.group_discard("admins", self.channel_name)
+
+    async def receive(self, text_data):
+        data = json.loads(text_data)
+        
+        if data.get('type') == 'location_update' and self.user.role == 'agent':
+            lat = data['lat']
+            lng = data['lng']
+            speed = data['speed']
+            
+            # Save to DB (triggers signals for GEO + Anomaly)
+            update = await self.save_location(lat, lng, speed)
+            
+            # Find active order
+            order_id = await self.get_active_order_id()
+            
+            # LOCATION_UPDATE Logging
+            logger.info(
+                "location_update", 
+                extra={
+                    "agent_id": str(self.user.id), 
+                    "order_id": str(order_id) if order_id else None,
+                    "lat": lat, 
+                    "lng": lng, 
+                    "speed_kmph": speed
+                }
+            )
+            
+            # Broadcast update
+            payload = {
+                "type": "tracking_message",
+                "data": {
+                    "agent_id": self.user.id,
+                    "lat": lat,
+                    "lng": lng,
+                    "speed": speed,
+                    "order_id": order_id
+                }
+            }
+            
+            await self.channel_layer.group_send("admins", payload)
+            
+            if order_id:
+                group_name = f"order_{order_id}"
+                await self.channel_layer.group_add(group_name, self.channel_name) # Ensure joined
+                await self.channel_layer.group_send(group_name, payload)
+
+    @database_sync_to_async
+    def save_location(self, lat, lng, speed):
+        from agents.models import DeliveryAgent
+        from tracking.models import LocationUpdate
+        agent_profile = DeliveryAgent.objects.get(user=self.user)
+        return LocationUpdate.objects.create(
+            agent=agent_profile,
+            lat=lat,
+            lng=lng,
+            speed_kmph=speed
+        )
+
+    @database_sync_to_async
+    def get_active_order_id(self):
+        from agents.models import DeliveryAgent
+        from orders.models import Order
+        agent_profile = DeliveryAgent.objects.get(user=self.user)
+        order = Order.objects.filter(agent=agent_profile, status__in=['assigned', 'picked_up', 'in_transit']).first()
+        return order.id if order else None
+
+    async def tracking_message(self, event):
+        await self.send(text_data=json.dumps(event["data"]))
+
+    async def anomaly_alert(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "anomaly",
+            "data": event["data"]
+        }))
+
+
+class AdminConsumer(AsyncWebsocketConsumer):
+    async def connect(self):
+        self.user = self.scope["user"]
+        
+        if self.user.is_anonymous:
+            await self.close()
+            return
+
+        if self.user.role != 'admin':
+            await self.close()
+            return
+
+        await self.channel_layer.group_add("admins", self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        await self.channel_layer.group_discard("admins", self.channel_name)
+
+    async def receive(self, text_data):
+        pass  # Admin only receives, doesn't send
+
+    async def tracking_message(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "agent_location_update",
+            **event["data"]
+        }))
+
+    async def anomaly_alert(self, event):
+        await self.send(text_data=json.dumps({
+            "type": "anomaly_detected",
+            **event["data"]
+        }))
