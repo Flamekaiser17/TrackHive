@@ -40,3 +40,4 @@ web_logs.txt
 test_double_assignment.py
 locustfile.py (Exclude if you want to keep performance tests)
 *.log
+.env
