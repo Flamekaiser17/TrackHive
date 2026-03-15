@@ -1,0 +1,64 @@
+services:
+  # 1. Main Web Service (Django + Daphne)
+  - type: web
+    name: trackhive-api
+    runtime: docker
+    dockerFilePath: backend/Dockerfile.prod
+    dockerContext: backend/
+    plan: free
+    healthCheckPath: /api/health/
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trackhive-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: trackhive-redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: trackhive-api.onrender.com
+
+  # 2. Celery Worker
+  - type: worker
+    name: trackhive-worker
+    runtime: docker
+    dockerFilePath: backend/Dockerfile.prod
+    dockerContext: backend/
+    startCommand: "celery -A config worker -l info -Q high_priority,default -c 4"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - fromService:
+          type: web
+          name: trackhive-api
+          property: envVar
+
+  # 3. Celery Beat
+  - type: worker
+    name: trackhive-beat
+    runtime: docker
+    dockerFilePath: backend/Dockerfile.prod
+    dockerContext: backend/
+    startCommand: "celery -A config beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - fromService:
+          type: web
+          name: trackhive-api
+          property: envVar
+
+databases:
+  - name: trackhive-db
+    plan: free
+
+redis:
+  - name: trackhive-redis
+    plan: free
+    ipAllowList: [] # Only allow internal connections
