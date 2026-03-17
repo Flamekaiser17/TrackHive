@@ -29,7 +29,7 @@ services:
       - key: DJANGO_SETTINGS_MODULE
         value: "config.settings"
 
-  - type: worker
+  - type: web
     name: trackhive-celery
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
@@ -52,7 +52,7 @@ services:
       - key: DJANGO_SETTINGS_MODULE
         value: "config.settings"
 
-  - type: worker
+  - type: web
     name: trackhive-beat
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
