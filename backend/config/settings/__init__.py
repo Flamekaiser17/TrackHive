@@ -248,3 +248,34 @@ LOGGING = {
         },
     },
 }
+
+# === PRODUCTION OVERRIDES (Render.com) ===
+import dj_database_url
+
+# 1. Database (RDS/Render Postgres)
+if os.environ.get('DATABASE_URL'):
+    DATABASES['default'] = dj_database_url.parse(
+        os.environ.get('DATABASE_URL'),
+        conn_max_age=600,
+        ssl_require=True
+    )
+
+# 2. Redis & Channels
+REDIS_URL = os.environ.get('REDIS_URL', REDIS_URL)
+if os.environ.get('REDIS_URL'):
+    CHANNEL_LAYERS["default"]["CONFIG"]["hosts"] = [REDIS_URL]
+    CELERY_BROKER_URL = REDIS_URL
+    CELERY_RESULT_BACKEND = REDIS_URL
+
+# 3. Security
+if not DEBUG:
+    SECRET_KEY = os.environ.get('SECRET_KEY', SECRET_KEY)
+    ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '.onrender.com').split(',')
+    CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5173').split(',')
+
+# 4. Static Files (WhiteNoise)
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+if 'whitenoise.middleware.WhiteNoiseMiddleware' not in MIDDLEWARE:
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
+
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'

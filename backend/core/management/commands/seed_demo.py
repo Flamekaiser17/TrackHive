@@ -16,10 +16,12 @@ class Command(BaseCommand):
     help = "Seeds the database with professional demo data for interviews."
 
     def handle(self, *args, **options):
-        self.stdout.write("🏗️ Seeding TrackHive Demo data...")
+        # IDEMPOTENT: Only seed if database is empty
+        if User.objects.exists():
+            self.stdout.write(self.style.WARNING("⚠️ Database already has data. Skipping demo seed."))
+            return
 
-        # 1. Clean existing data
-        User.objects.all().delete()
+        self.stdout.write("🏗️ Seeding TrackHive Demo data...")
         
         # 2. Create Admin
         admin = User.objects.create_superuser(
