@@ -7,8 +7,11 @@ from django.contrib.auth import get_user_model
 from agents.models import DeliveryAgent
 from orders.models import Order
 from core.redis_client import redis_client
-from celery import current_app as celery_app
+from django.conf import settings
 from .tasks import simulate_agent_movement
+from config.celery import app as celery_app
+
+CITY_CONFIG = settings.CITY_CONFIG
 
 User = get_user_model()
 
@@ -21,30 +24,39 @@ class SimulateStartView(APIView):
         order_count = request.data.get('order_count', 200)
 
         for i in range(agent_count):
-            username = f'sim_agent_{i}_{random.randint(1000, 9999)}'
-            user = User.objects.create(username=username, role='agent')
+            uid = random.randint(1000, 9999)
+            username = f'sim_agent_{i}_{uid}'
+            user = User.objects.create(
+                username=username, 
+                email=f"{username}@trackhive.com",
+                role='agent'
+            )
             agent = DeliveryAgent.objects.create(
                 user=user,
                 status='available',
-                current_lat=12.97 + random.uniform(-0.05, 0.05),
-                current_lng=77.59 + random.uniform(-0.05, 0.05),
+                current_lat=CITY_CONFIG["lat"] + random.uniform(-0.05, 0.05),
+                current_lng=CITY_CONFIG["lng"] + random.uniform(-0.05, 0.05),
                 is_simulated=True
             )
             task = simulate_agent_movement.delay(agent.id)
             redis_client.sadd("simulation:active_tasks", task.id)
 
         for j in range(order_count):
-            customer_name = f'sim_customer_{j}_{random.randint(100, 999)}'
+            uid = random.randint(100, 999)
+            customer_name = f'sim_customer_{j}_{uid}'
             customer, _ = User.objects.get_or_create(
                 username=customer_name,
-                defaults={'role': 'customer'}
+                defaults={
+                    'role': 'customer',
+                    'email': f"{customer_name}@trackhive.com"
+                }
             )
             Order.objects.create(
                 customer=customer,
-                pickup_lat=12.97 + random.uniform(-0.1, 0.1),
-                pickup_lng=77.59 + random.uniform(-0.1, 0.1),
-                drop_lat=12.97 + random.uniform(-0.1, 0.1),
-                drop_lng=77.59 + random.uniform(-0.1, 0.1),
+                pickup_lat=CITY_CONFIG["lat"] + random.uniform(-0.08, 0.08),
+                pickup_lng=CITY_CONFIG["lng"] + random.uniform(-0.08, 0.08),
+                drop_lat=CITY_CONFIG["lat"] + random.uniform(-0.1, 0.1),
+                drop_lng=CITY_CONFIG["lng"] + random.uniform(-0.1, 0.1),
                 status='created'
             )
 

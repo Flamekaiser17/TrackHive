@@ -1,6 +1,8 @@
 import random
-from django.core.management.base import BaseCommand
 from django.contrib.auth import get_user_model
+
+from django.core.management.base import BaseCommand
+from django.conf import settings
 from agents.models import DeliveryAgent
 from orders.models import Order
 from anomaly.models import AnomalyLog
@@ -31,18 +33,28 @@ class Command(BaseCommand):
         fatigues = [1.2, 4.5, 7.1, 8.8, 2.0]
         agents = []
         for i, f in enumerate(fatigues):
-            u = User.objects.create_user(username=f'agent_{i+1}', role='agent', password='password123')
+            u = User.objects.create_user(
+                username=f'agent_{i+1}', 
+                email=f'agent_{i+1}@trackhive.com',
+                role='agent', 
+                password='password123'
+            )
             a = DeliveryAgent.objects.create(
                 user=u,
                 status='available' if f < 8.0 else 'busy',
                 fatigue_score=f,
-                current_lat=19.07 + random.uniform(-0.02, 0.02),
-                current_lng=72.87 + random.uniform(-0.02, 0.02)
+                current_lat=settings.CITY_CONFIG["lat"] + random.uniform(-0.02, 0.02),
+                current_lng=settings.CITY_CONFIG["lng"] + random.uniform(-0.02, 0.02)
             )
             agents.append(a)
 
         # 4. Create 10 Orders
-        customer = User.objects.create_user(username='demo_customer', role='customer', password='password123')
+        customer = User.objects.create_user(
+            username='demo_customer', 
+            email='customer@trackhive.com',
+            role='customer', 
+            password='password123'
+        )
         
         # 3 created
         for _ in range(3):

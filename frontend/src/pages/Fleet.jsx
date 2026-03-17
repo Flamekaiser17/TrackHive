@@ -49,7 +49,7 @@ const Fleet = ({ agents = [], orders = [], onNavigate }) => {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
           {agents.map((agent, i) => {
-            const name = agent.user?.username || agent.name || `Agent_${agent.id}`;
+            const name = agent.username || agent.user?.username || agent.name || `Agent_${agent.id}`;
             const fatigue = agent.fatigue_score || 0;
             const ordersCount = agent.orders_last_4hrs || 0;
             const km = agent.total_km_today || 0;

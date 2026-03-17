@@ -2,6 +2,7 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useEffect } from 'react';
 import L from 'leaflet';
+import { CITY_CENTER } from '../config';
 
 /**
  * High-fidelity agent marker with kinetic pulsing rings.
@@ -17,7 +18,7 @@ const createAgentIcon = (status, hasAnomaly) => {
   } else if (status === 'available') {
     color = '#00E5A0';
     pulse = true;
-  } else if (status === 'busy' || status === 'in_transit') {
+  } else if (status === 'busy' || status === 'in_transit' || status === 'active') {
     color = '#00B4FF';
     pulse = true;
   }
@@ -61,16 +62,20 @@ const MapResizer = () => {
 
 const CenterChanger = ({ center }) => {
   const map = useMap();
-  useEffect(() => { map.setView(center, map.getZoom()); }, [center, map]);
+  useEffect(() => { 
+    if (center && !isNaN(center[0]) && !isNaN(center[1])) {
+      map.setView(center, map.getZoom()); 
+    }
+  }, [center, map]);
   return null;
 };
 
 const Map = ({ agents = [], orders = [], unresolvedAnomalies = [], onAgentClick, focusedAgentId }) => {
-  let center = [12.9716, 77.5946];
+  let center = [CITY_CENTER.lat, CITY_CENTER.lng];
   if (focusedAgentId) {
-    const focused = agents.find(a => a.id === focusedAgentId);
-    if (focused && (focused.current_lat || focused.lat)) {
-      center = [focused.current_lat || focused.lat, focused.current_lng || focused.lng];
+    const focused = (agents || []).find(a => a.id === focusedAgentId);
+    if (focused && !isNaN(focused.lat) && !isNaN(focused.lng)) {
+      center = [focused.lat, focused.lng];
     }
   }
 
@@ -93,22 +98,23 @@ const Map = ({ agents = [], orders = [], unresolvedAnomalies = [], onAgentClick,
         <MapResizer />
         <CenterChanger center={center} />
 
-        {agents.map((agent) => {
-          const hasAnomaly = unresolvedAnomalies.some(a => a.agent_id === agent.id);
-          const pos = [agent.lat || agent.current_lat || 12.97, agent.lng || agent.current_lng || 77.59];
+        {/* DEFENSIVE: Render only agents with valid coordinates */}
+        {(agents || []).filter(a => a.lat && a.lng && !isNaN(a.lat)).map((agent) => {
+          const hasAnomaly = (unresolvedAnomalies || []).some(anom => anom.agent_id === agent.id);
+          const pos = [agent.lat, agent.lng];
           
           return (
             <Marker 
-              key={agent.id} 
+              key={`agent-${agent.id}`} 
               position={pos} 
               icon={createAgentIcon(agent.status, hasAnomaly)}
               eventHandlers={{ click: () => onAgentClick && onAgentClick(agent) }}
             >
               <Popup className="glass-popup">
                 <div style={{ padding: '4px' }}>
-                  <h4 style={{ margin: '0 0 4px', fontSize: '13px', color: 'white' }}>{agent.name}</h4>
+                  <h4 style={{ margin: '0 0 4px', fontSize: '13px', color: 'white' }}>{agent.username || `Agent_${agent.id}`}</h4>
                   <p className="mono" style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
-                    {agent.speed_kmph || agent.speed || 0} km/h • {agent.status || 'offline'}
+                    {Math.round(agent.speed_kmph || agent.speed || 0)} km/h • {agent.status || 'offline'}
                   </p>
                 </div>
               </Popup>
@@ -116,9 +122,10 @@ const Map = ({ agents = [], orders = [], unresolvedAnomalies = [], onAgentClick,
           );
         })}
 
-        {orders.map((order) => {
-           const pos = [order.lat || 12.97, order.lng || 77.59];
-           return <Marker key={order.id} position={pos} icon={orderIcon} />;
+        {/* DEFENSIVE: Render only orders with valid coordinates */}
+        {(orders || []).filter(o => o.lat && o.lng).map((order) => {
+           const pos = [order.lat, order.lng];
+           return <Marker key={`order-${order.id}`} position={pos} icon={orderIcon} />;
         })}
       </MapContainer>
     </div>

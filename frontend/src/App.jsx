@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import Dashboard from './pages/Dashboard';
@@ -10,25 +10,26 @@ import Simulator from './pages/Simulator';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getAgents, getOrders, getAnomalies } from './api/endpoints';
+import { FleetContext } from './context/FleetContext';
+import useAgents from './hooks/useAgents';
 
 const TrackHiveApp = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [focusedAgentId, setFocusedAgentId] = useState(null);
   
+  const { agents } = useAgents();
+  const { unresolvedCount, orders } = useContext(FleetContext);
+  
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    () => !!localStorage.getItem('access_token')
+  );
+
   const handleNavigate = (tab, agentId = null) => {
     if (tab === 'live-map') {
       setFocusedAgentId(agentId);
     }
     setActiveTab(tab);
   };
-
-  const [agents, setAgents] = useState([]);
-  const [orders, setOrders] = useState([]);
-  const [anomalyCount, setAnomalyCount] = useState(0); // FIXED: real count
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () => !!localStorage.getItem('access_token')
-  );
 
   useEffect(() => {
     const handleLogout = () => {
@@ -39,61 +40,30 @@ const TrackHiveApp = () => {
     return () => window.removeEventListener('auth_logout', handleLogout);
   }, []);
 
-  // FIXED: Real API data instead of mock
-  useEffect(() => {
-    if (!isAuthenticated) return;
-
-    const fetchData = async () => {
-      try {
-        const [agentsRes, ordersRes, anomaliesRes] = await Promise.all([
-          getAgents(),
-          getOrders(),
-          getAnomalies(),
-        ]);
-        
-        // Handle both paginated and non-paginated responses
-        setAgents(agentsRes?.results || agentsRes || []);
-        setOrders(ordersRes?.results || ordersRes || []);
-        
-        const anomalyList = anomaliesRes?.results || anomaliesRes || [];
-        const unresolved = anomalyList.filter(a => !a.resolved);
-        setAnomalyCount(unresolved.length);
-      } catch (err) {
-        console.error('Failed to fetch app data:', err);
-      }
-    };
-
-    fetchData();
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchData, 60000);
-    return () => clearInterval(interval);
-  }, [isAuthenticated]);
-
   if (!isAuthenticated) {
     return <Login onLogin={() => setIsAuthenticated(true)} />;
   }
 
   const renderContent = () => {
     switch(activeTab) {
-      case 'dashboard': return <Dashboard agents={agents} orders={orders} />;
+      case 'dashboard': return <Dashboard />;
       case 'live-map': return <LiveMap agents={agents} orders={orders} focusedAgentId={focusedAgentId} />;
       case 'fleet': return <Fleet agents={agents} orders={orders} onNavigate={handleNavigate} />;
       case 'orders': return <Orders />;
       case 'anomalies': return <Anomalies />;
       case 'simulator': return <Simulator />;
       case 'settings': return <Settings />;
-      default: return <Dashboard agents={agents} orders={orders} />;
+      default: return <Dashboard />;
     }
   };
 
   return (
     <div className="app-layout">
-      <Header agentCount={agents.length} />
-      {/* FIXED: Real anomalyCount passed to Sidebar */}
+      <Header />
       <Sidebar
         currentTab={activeTab}
         onTabChange={setActiveTab}
-        anomalyCount={anomalyCount}
+        anomalyCount={unresolvedCount}
       />
       <main className="main-area" style={{ overflow: 'hidden', position: 'relative', background: 'var(--bg-primary)' }}>
         <AnimatePresence mode="wait">

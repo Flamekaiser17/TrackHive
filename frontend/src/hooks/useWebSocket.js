@@ -19,8 +19,8 @@ const useWebSocket = () => {
       return;
     }
 
-    // FIXED: BUG 1 - Connect DIRECTLY to ws://localhost:8000, NOT via proxy.
-    const url = `ws://localhost:8000/ws/admin/?token=${token}`;
+    const WS_BASE = import.meta.env.VITE_WS_URL || 'ws://localhost:8000';
+    const url = `${WS_BASE}/ws/admin/?token=${token}`;
     const ws = new WebSocket(url);
 
     ws.onopen = () => {

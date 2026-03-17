@@ -1,88 +1,68 @@
 import { Play, Square, Terminal, Activity, Users, Zap, ShieldAlert, Cpu, Server } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useContext } from 'react';
 import { startSimulation, stopSimulation } from '../api/endpoints';
-import useWebSocket from '../hooks/useWebSocket';
+import { FleetContext } from '../context/FleetContext';
 
 const Simulator = () => {
-  const [isRunning, setIsRunning] = useState(false);
+  const { 
+    isSimulating, setIsSimulating, 
+    simStats, setSimStats, 
+    simLogs, addSimLog,
+    connected, lastMessage 
+  } = useContext(FleetContext);
+
   const [loading, setLoading] = useState(false);
-  const [logs, setLogs] = useState([
-    { id: 1, time: '12:45:01', msg: 'Simulator initialized. Awaiting user commands...', type: 'system' },
-  ]);
-  const [stats, setStats] = useState({ agents: 0, events: 0, anomalies: 0 });
   const logEndRef = useRef(null);
+  
 
-  const { connected, lastMessage } = useWebSocket();
-
+  // Auto-scroll logs
   useEffect(() => {
-    if (!lastMessage || !isRunning) return;
+    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [simLogs]);
+
+  // Log throttling for UI performance
+  useEffect(() => {
+    if (!lastMessage || !isSimulating) return;
     
     if (lastMessage.type === 'agent_location_update') {
-      setStats(prev => ({ ...prev, events: prev.events + 1 }));
-      if (stats.events % 15 === 0) {
-        addLog(
-          `Telemetry: Agent_${lastMessage.agent_id} → ` +
-          `[${Number(lastMessage.lat || 0).toFixed(4)}, ` +
-          `${Number(lastMessage.lng || 0).toFixed(4)}] ` +
-          `@ ${lastMessage.speed_kmph || lastMessage.speed || 0}km/h`,
+      if (simStats.events % 20 === 0) {
+        addSimLog(
+          `Telemetry: Agent_${lastMessage.agent_id} @ ` +
+          `${Math.round(lastMessage.speed_kmph || lastMessage.speed || 0)}km/h`,
           'info'
         );
       }
     }
-    
-    if (lastMessage.type === 'anomaly_detected') {
-      setStats(prev => ({ ...prev, anomalies: prev.anomalies + 1 }));
-      addLog(
-        `ANOMALY: ${(lastMessage.anomaly_type || '').replace(/_/g, ' ')} ` +
-        `detected on Agent_${lastMessage.agent_id}`,
-        'warning'
-      );
-    }
-    
-  }, [lastMessage, isRunning]);
+  }, [lastMessage, isSimulating, simStats.events, addSimLog]);
 
-  useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [logs]);
-
-  const addLog = (msg, type = 'info') => {
-    const time = new Date().toLocaleTimeString('en-IN', { hour12: false });
-    setLogs(prev => [...prev, { id: Date.now(), time, msg, type }]);
-  };
-
-  // FIXED: Real API call
   const startSim = async () => {
-    if (loading) return;
+    if (loading || isSimulating) return;
     setLoading(true);
-    addLog('DEPLOYING 50 SIMULATED AGENTS TO BENGALURU DISTRICT...', 'success');
+    addSimLog('DEPLOYING 50 SIMULATED AGENTS TO BENGALURU DISTRICT...', 'success');
     try {
       await startSimulation();
-      setIsRunning(true);
-      addLog('Backend confirmed: 50 agents deployed', 'success');
-      addLog(`WebSocket: ${connected ? 'CONNECTED — receiving telemetry' : 'DISCONNECTED — check backend'}`, connected ? 'success' : 'warning');
-      addLog('Anomaly detection engine: ACTIVE', 'system');
-      setStats({ agents: 50, events: 0, anomalies: 0 });
+      setIsSimulating(true);
+      addSimLog('Backend confirmed: 50 agents deployed', 'success');
+      setSimStats({ agents: 50, events: 0, anomalies: 0 });
     } catch (err) {
-      addLog('ERROR: Failed to deploy agents — ' + (err.response?.data?.detail || err.message), 'warning');
+      addSimLog('ERROR: Failed to deploy agents — ' + (err.response?.data?.detail || err.message), 'warning');
       console.error('Start simulation failed:', err);
     } finally {
       setLoading(false);
     }
   };
 
-  // FIXED: Real API call
   const stopSim = async () => {
-    if (loading) return;
+    if (loading || !isSimulating) return;
     setLoading(true);
-    addLog('HALTING ALL SIMULATED AGENTS. Cleaning up threads...', 'warning');
+    addSimLog('HALTING ALL SIMULATED AGENTS. Cleaning up threads...', 'warning');
     try {
       await stopSimulation();
-      setIsRunning(false);
-      addLog('Simulation terminated. Cluster status: IDLE.', 'system');
-      setStats({ agents: 0, events: 0, anomalies: 0 });
+      setIsSimulating(false);
+      addSimLog('Simulation terminated. Cluster status: IDLE.', 'system');
     } catch (err) {
-      addLog('ERROR: Failed to stop simulation — ' + (err.response?.data?.detail || err.message), 'warning');
+      addSimLog('ERROR: Failed to stop simulation — ' + (err.response?.data?.detail || err.message), 'warning');
       console.error('Stop simulation failed:', err);
     } finally {
       setLoading(false);
@@ -103,7 +83,7 @@ const Simulator = () => {
           <span style={{ fontSize: '11px', fontWeight: '800', color: connected ? 'var(--accent-green)' : 'var(--accent-red)' }}>
             {loading ? 'PROCESSING...' : 
              !connected ? 'WS DISCONNECTED' :
-             isRunning ? 'AGENT SWARM ACTIVE' : 'SYSTEM IDLE'}
+             isSimulating ? 'AGENT SWARM ACTIVE' : 'SYSTEM IDLE'}
           </span>
         </div>
       </header>
@@ -111,15 +91,15 @@ const Simulator = () => {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
         {/* START */}
         <motion.div
-          whileHover={{ scale: !isRunning && !loading ? 1.02 : 1 }}
-          onClick={!isRunning && !loading ? startSim : undefined}
+          whileHover={{ scale: !isSimulating && !loading ? 1.02 : 1 }}
+          onClick={!isSimulating && !loading ? startSim : undefined}
           style={{
             padding: '32px',
             background: 'linear-gradient(135deg, rgba(108, 99, 255, 0.1) 0%, rgba(108, 99, 255, 0.05) 100%)',
             borderRadius: '24px',
             border: '1px solid var(--primary)',
-            cursor: !isRunning && !loading ? 'pointer' : 'not-allowed',
-            opacity: isRunning || loading ? 0.5 : 1,
+            cursor: !isSimulating && !loading ? 'pointer' : 'not-allowed',
+            opacity: isSimulating || loading ? 0.5 : 1,
             display: 'flex', alignItems: 'center', gap: '32px',
             transition: 'opacity 0.3s'
           }}
@@ -135,15 +115,15 @@ const Simulator = () => {
 
         {/* STOP */}
         <motion.div
-          whileHover={{ scale: isRunning && !loading ? 1.02 : 1 }}
-          onClick={isRunning && !loading ? stopSim : undefined}
+          whileHover={{ scale: isSimulating && !loading ? 1.02 : 1 }}
+          onClick={isSimulating && !loading ? stopSim : undefined}
           style={{
             padding: '32px',
             background: 'linear-gradient(135deg, rgba(255, 71, 87, 0.1) 0%, rgba(255, 71, 87, 0.05) 100%)',
             borderRadius: '24px',
             border: '1px solid var(--accent-red)',
-            cursor: isRunning && !loading ? 'pointer' : 'not-allowed',
-            opacity: !isRunning || loading ? 0.5 : 1,
+            cursor: isSimulating && !loading ? 'pointer' : 'not-allowed',
+            opacity: !isSimulating || loading ? 0.5 : 1,
             display: 'flex', alignItems: 'center', gap: '32px',
             transition: 'opacity 0.3s'
           }}
@@ -164,10 +144,10 @@ const Simulator = () => {
           <header style={{ padding: '16px 24px', background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid var(--border)' }}>
             <Terminal size={16} color="var(--text-muted)" />
             <h4 className="mono" style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700' }}>CHAOS_KERNEL_STDOUT</h4>
-            {isRunning && <Activity size={12} color="var(--accent-green)" />}
+            {isSimulating && <Activity size={12} color="var(--accent-green)" />}
           </header>
           <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {logs.map(log => (
+            {simLogs.map(log => (
               <div key={log.id} style={{ fontSize: '13px', display: 'flex', gap: '16px' }}>
                 <span className="mono" style={{ color: 'var(--text-muted)', minWidth: '85px' }}>[{log.time}]</span>
                 <span className="mono" style={{
@@ -190,9 +170,9 @@ const Simulator = () => {
             <h4 style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '800', letterSpacing: '0.04em', marginBottom: '24px' }}>CLUSTER PERFORMANCE</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
               {[
-                { label: 'Agents Active', value: stats.agents, icon: Users, color: 'var(--accent-green)', bg: 'rgba(0, 229, 160, 0.1)' },
-                { label: 'Events Processed', value: stats.events, icon: Cpu, color: 'var(--accent-blue)', bg: 'rgba(0, 180, 255, 0.1)' },
-                { label: 'Anomalies Created', value: stats.anomalies, icon: ShieldAlert, color: 'var(--accent-red)', bg: 'rgba(255, 71, 87, 0.1)' },
+                { label: 'Agents Active', value: simStats.agents, icon: Users, color: 'var(--accent-green)', bg: 'rgba(0, 229, 160, 0.1)' },
+                { label: 'Events Processed', value: simStats.events, icon: Cpu, color: 'var(--accent-blue)', bg: 'rgba(0, 180, 255, 0.1)' },
+                { label: 'Anomalies Created', value: simStats.anomalies, icon: ShieldAlert, color: 'var(--accent-red)', bg: 'rgba(255, 71, 87, 0.1)' },
               ].map(({ label, value, icon: Icon, color, bg }) => (
                 <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -212,7 +192,7 @@ const Simulator = () => {
             <div style={{ textAlign: 'center' }}>
               <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '800' }}>ORCHESTRATION ENGINE</p>
               <p style={{ fontSize: '14px', fontWeight: '600', marginTop: '4px' }}>
-                Worker Status: {loading ? 'PROCESSING' : isRunning ? 'HIGH_LOAD' : 'NOMINAL'}
+                Worker Status: {loading ? 'PROCESSING' : isSimulating ? 'HIGH_LOAD' : 'NOMINAL'}
               </p>
             </div>
           </div>

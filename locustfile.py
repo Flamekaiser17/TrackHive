@@ -5,9 +5,9 @@ import uuid
 from locust import HttpUser, task, between, events
 from websocket import create_connection
 
-# Global lat/lng for Mumbai
-MUMBAI_LAT = 19.0760
-MUMBAI_LNG = 72.8777
+# Global lat/lng for Bengaluru
+BENGALURU_LAT = 12.9716
+BENGALURU_LNG = 77.5946
 
 class TrackHiveWSUser(HttpUser):
     # This keeps it from running tasks until abstract classes are formed
@@ -50,18 +50,24 @@ class AgentUser(TrackHiveWSUser):
     @task
     def send_location_update(self):
         start_time = time.perf_counter()
-        lat = MUMBAI_LAT + random.uniform(-0.1, 0.1)
-        lng = MUMBAI_LNG + random.uniform(-0.1, 0.1)
+        lat = BENGALURU_LAT + random.uniform(-0.1, 0.1)
+        lng = BENGALURU_LNG + random.uniform(-0.1, 0.1)
         
-        payload = {
-            "type": "location_update",
+        self.client.post("/api/tracking/update_location/", json={
+            "agent_id": self.agent_id,
             "lat": lat,
             "lng": lng,
-            "speed": random.uniform(20, 80)
-        }
+            "speed_kmph": random.uniform(20, 60)
+        })
         
         if self.ws:
             try:
+                payload = {
+                    "type": "location_update",
+                    "lat": lat,
+                    "lng": lng,
+                    "speed": random.uniform(20, 80)
+                }
                 self.ws.send(json.dumps(payload))
                 # Measure time for server to respond if server sends ACKs
                 # Since TrackHive is broadcast-only right now, we measure send latency

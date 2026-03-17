@@ -5,13 +5,14 @@ import './index.css'
 import App from './App.jsx'
 
 import { ToastProvider } from './context/ToastContext'
+import { FleetProvider } from './context/FleetContext'
 
 createRoot(document.getElementById('root')).render(
-  <StrictMode>
-    <BrowserRouter>
-      <ToastProvider>
+  <BrowserRouter>
+    <ToastProvider>
+      <FleetProvider>
         <App />
-      </ToastProvider>
-    </BrowserRouter>
-  </StrictMode>,
+      </FleetProvider>
+    </ToastProvider>
+  </BrowserRouter>,
 )

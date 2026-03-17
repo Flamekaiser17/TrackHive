@@ -16,6 +16,8 @@ def simulate_agent_movement(self, agent_id):
     from anomaly.tasks import detect_anomalies_task
     from orders.models import Order
     from orders.eta_service import calculate_and_push_eta
+    from django.conf import settings
+    CITY_CONFIG = settings.CITY_CONFIG
 
     # Check Redis if simulation still active before retry
     if not redis_client.sismember("simulation:active_tasks", self.request.id):
@@ -32,9 +34,15 @@ def simulate_agent_movement(self, agent_id):
         return
 
     channel_layer = get_channel_layer()
+    
+    # SAFE BOUNDS: Fallback to center if bounds missing
+    bounds = CITY_CONFIG.get("bounds", {
+        "lat_min": CITY_CONFIG["lat"] - 0.1, "lat_max": CITY_CONFIG["lat"] + 0.1,
+        "lng_min": CITY_CONFIG["lng"] - 0.1, "lng_max": CITY_CONFIG["lng"] + 0.1
+    })
 
-    lat = random.uniform(12.85, 13.05)
-    lng = random.uniform(77.45, 77.65)
+    lat = random.uniform(bounds["lat_min"], bounds["lat_max"])
+    lng = random.uniform(bounds["lng_min"], bounds["lng_max"])
     
     agent.current_lat = lat
     agent.current_lng = lng

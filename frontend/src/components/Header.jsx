@@ -5,8 +5,7 @@ import useAgents from '../hooks/useAgents';
 
 const Header = () => {
   const [time, setTime] = useState(new Date());
-  const { connected, lastMessage } = useWebSocket();
-  const { agents } = useAgents(lastMessage);
+  const { agents, connected } = useAgents();
 
   useEffect(() => {
     const timer = setInterval(() => setTime(new Date()), 1000);

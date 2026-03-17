@@ -1,68 +1,31 @@
-import { useState, useEffect } from 'react';
-import { getAnomalies } from '../api/endpoints';
+import { useContext } from 'react';
+import { FleetContext } from '../context/FleetContext';
 
 /**
  * Custom hook for real-time anomaly monitoring and resolution tracking.
- * Syncs the intelligence engine pulses with the terminal view.
+ * Consumes the global FleetContext for a unified state across the app.
  */
-const useAnomalies = (lastMessage) => {
-  const [anomalies, setAnomalies] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const useAnomalies = () => {
+  const context = useContext(FleetContext);
 
-  // Initial synchronization for the Anomaly Intelligence Center
-  useEffect(() => {
-    const fetchAnomalies = async () => {
-      try {
-        setLoading(true);
-        const data = await getAnomalies();
-        setAnomalies(Array.isArray(data) ? data : []);
-        setError(null);
-      } catch (err) {
-        console.error('API_SYNC_ERROR: Failed to retrieve anomaly logs.', err);
-        setError('Failed to fetch initial anomaly data.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAnomalies();
-  }, []);
+  if (!context) {
+    throw new Error('useAnomalies must be used within a FleetProvider');
+  }
 
-  // Sync real-time intelligence pulses from WebSocket messages
-  useEffect(() => {
-    if (!lastMessage) return;
+  // Defensive formatting for the dashboard consumption
+  const anomaliesWithSafety = (context.anomalies || []).map(a => ({
+    ...a,
+    status: a.resolved ? 'RESOLVED' : 'UNRESOLVED', // Unified status field
+    type: a.anomaly_type?.replace(/_/g, ' ').toUpperCase() || 'UNKNOWN ANOMALY'
+  }));
 
-    setAnomalies((prevAnomalies) => {
-      const updatedAnomalies = [...prevAnomalies];
-
-      // Handle new critical anomaly detection
-      if (lastMessage.type === 'anomaly_detected') {
-        const index = updatedAnomalies.findIndex(a => a.id === lastMessage.anomaly.id);
-        if (index === -1) {
-          // Prepend for real-time awareness in the Command Center
-          updatedAnomalies.unshift(lastMessage.anomaly);
-        }
-      }
-
-      // Handle anomaly resolution events
-      if (lastMessage.type === 'anomaly_resolved') {
-        const index = updatedAnomalies.findIndex(a => a.id === lastMessage.anomaly_id);
-        if (index !== -1) {
-          updatedAnomalies[index] = {
-            ...updatedAnomalies[index],
-            status: 'RESOLVED',
-            resolved_at: new Date().toISOString()
-          };
-        }
-      }
-
-      return updatedAnomalies;
-    });
-  }, [lastMessage]);
-
-  const unresolvedCount = (anomalies || []).filter(a => a.status === 'UNRESOLVED').length;
-
-  return { anomalies, unresolvedCount, loading, error };
+  return {
+    anomalies: anomaliesWithSafety,
+    unresolvedCount: context.unresolvedCount,
+    loading: context.loading,
+    error: context.error,
+    setAnomalies: context.setAnomalies
+  };
 };
 
 export default useAnomalies;
