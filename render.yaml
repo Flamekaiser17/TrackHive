@@ -79,6 +79,7 @@ databases:
     plan: free
 
 redis:
-  - name: trackhive-redis
+  - type: keyvalue
+    name: trackhive-redis
     plan: free
     maxmemoryPolicy: allkeys-lru
