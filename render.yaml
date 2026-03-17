@@ -4,7 +4,7 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     plan: free
-    startCommand: >
+    dockerCommand: >
       sh -c "python manage.py migrate &&
              python manage.py seed_demo &&
              daphne -b 0.0.0.0 -p $PORT config.asgi:application"
@@ -34,24 +34,43 @@ services:
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     plan: free
-    startCommand: "celery -A config worker --loglevel=info --concurrency=4"
+    dockerCommand: "celery -A config worker --loglevel=info --concurrency=4"
     envVars:
-      - fromService:
+      - key: SECRET_KEY
+        fromService:
           type: web
           name: trackhive-web
-          property: envVar
+          property: connectionString
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trackhive-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: trackhive-redis
+          type: keyvalue
+          property: connectionString
+      - key: DJANGO_SETTINGS_MODULE
+        value: "config.settings"
 
   - type: worker
     name: trackhive-beat
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     plan: free
-    startCommand: "celery -A config beat --loglevel=info"
+    dockerCommand: "celery -A config beat --loglevel=info"
     envVars:
-      - fromService:
-          type: web
-          name: trackhive-web
-          property: envVar
+      - key: DATABASE_URL
+        fromDatabase:
+          name: trackhive-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: trackhive-redis
+          type: keyvalue
+          property: connectionString
+      - key: DJANGO_SETTINGS_MODULE
+        value: "config.settings"
 
   - type: web
     name: trackhive-frontend
@@ -72,6 +91,7 @@ services:
     name: trackhive-redis
     plan: free
     maxmemoryPolicy: allkeys-lru
+    ipAllowList: []
 
 databases:
   - name: trackhive-db
