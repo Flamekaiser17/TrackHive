@@ -1,5 +1,4 @@
 services:
-  # 1. Django Web Service (ASGI with Daphne)
   - type: web
     name: trackhive-web
     runtime: docker
@@ -21,7 +20,7 @@ services:
       - key: REDIS_URL
         fromService:
           name: trackhive-redis
-          type: redis
+          type: keyvalue
           property: connectionString
       - key: ALLOWED_HOSTS
         value: ".onrender.com"
@@ -30,7 +29,6 @@ services:
       - key: DJANGO_SETTINGS_MODULE
         value: "config.settings"
 
-  # 2. Celery Worker
   - type: worker
     name: trackhive-celery
     runtime: docker
@@ -43,20 +41,18 @@ services:
           name: trackhive-web
           property: envVar
 
-  # 3. Celery Beat
   - type: worker
     name: trackhive-beat
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     plan: free
-    startCommand: "celery -A config beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+    startCommand: "celery -A config beat --loglevel=info"
     envVars:
       - fromService:
           type: web
           name: trackhive-web
           property: envVar
 
-  # 4. React Frontend (Static Site)
   - type: web
     name: trackhive-frontend
     runtime: static
@@ -72,14 +68,13 @@ services:
         source: /*
         destination: /index.html
 
+  - type: keyvalue
+    name: trackhive-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+
 databases:
   - name: trackhive-db
     databaseName: trackhive
     user: trackhive_user
     plan: free
-
-redis:
-  - type: keyvalue
-    name: trackhive-redis
-    plan: free
-    maxmemoryPolicy: allkeys-lru
