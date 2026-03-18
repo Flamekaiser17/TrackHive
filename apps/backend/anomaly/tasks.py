@@ -14,23 +14,29 @@ logger = logging.getLogger('trackhive.anomaly')
 # from orders.models import Order
 # from orders.services import haversine
 
-def push_anomaly_to_ws(agent, anomaly_type, order=None):
+def push_anomaly_to_ws(agent, anomaly_type, order=None, anomaly_log=None):
+    """Broadcast a detected anomaly to all connected admin WebSocket clients."""
     channel_layer = get_channel_layer()
+    if not channel_layer:
+        return
     async_to_sync(channel_layer.group_send)(
         "admins",
         {
             "type": "anomaly_alert",
             "data": {
+                "id": anomaly_log.id if anomaly_log else None,
                 "agent_id": agent.id,
-                "agent_name": agent.user.username,
+                "agent_name": getattr(agent.user, 'username', f"Agent_{agent.id}"),
                 "anomaly_type": anomaly_type,
-                "order_id": order.id if order else None
+                "order_id": order.id if order else None,
+                "detected_at": anomaly_log.detected_at.isoformat() if anomaly_log and anomaly_log.detected_at else timezone.now().isoformat(),
+                "resolved": False
             }
         }
     )
 
 @shared_task
-def detect_anomalies_task(agent_id, current_lat, current_lng, 
+def detect_anomalies_task(agent_id, current_lat, current_lng,
                           speed_kmph, order_id=None):
     # IMPORTS ANDAR AAYE — fix hai yeh
     from .models import AnomalyLog
@@ -41,11 +47,11 @@ def detect_anomalies_task(agent_id, current_lat, current_lng,
 
     # Structured logging context
     extra = {
-        "agent_id": str(agent_id), 
+        "agent_id": str(agent_id),
         "order_id": str(order_id) if order_id else None
     }
     logger.info("detecting_anomalies_start", extra=extra)
-    
+
     try:
         agent = DeliveryAgent.objects.get(id=agent_id)
     except DeliveryAgent.DoesNotExist:
@@ -56,55 +62,83 @@ def detect_anomalies_task(agent_id, current_lat, current_lng,
         LocationUpdate.objects.filter(agent=agent)
         .order_by('-timestamp')[:5]
     )
-    
+
     anomaly_detected = None
     if speed_kmph > 120:
         anomaly_detected = 'speed_anomaly'
     elif speed_kmph == 0 and len(recent_updates) >= 2:
         five_mins_ago = timezone.now() - datetime.timedelta(minutes=5)
         stuck = all(
-            u.speed_kmph == 0 and u.timestamp > five_mins_ago 
+            u.speed_kmph == 0 and u.timestamp > five_mins_ago
             for u in recent_updates
         )
         if stuck:
             anomaly_detected = 'agent_stuck'
 
+    # High fatigue check (fatigue_score >= 8 is critical)
+    if agent.fatigue_score >= 8.0:
+        # Dedup: only fire once per hour to prevent spam after neutralize
+        one_hour_ago = timezone.now() - datetime.timedelta(hours=1)
+        already_flagged = AnomalyLog.objects.filter(
+            agent=agent,
+            anomaly_type='high_fatigue',
+            detected_at__gte=one_hour_ago
+        ).exists()
+        if not already_flagged:
+            logger.warning(
+                "anomaly_detected",
+                extra={**extra, "anomaly_type": 'high_fatigue', "fatigue": agent.fatigue_score}
+            )
+            fatigue_log = AnomalyLog.objects.create(
+                agent=agent, anomaly_type='high_fatigue'
+            )
+            push_anomaly_to_ws(agent, 'high_fatigue', anomaly_log=fatigue_log)
+
     if anomaly_detected:
-        logger.warning(
-            "anomaly_detected", 
-            extra={**extra, "anomaly_type": anomaly_detected, "speed": speed_kmph}
-        )
-        AnomalyLog.objects.create(
-            agent=agent, anomaly_type=anomaly_detected
-        )
-        push_anomaly_to_ws(agent, anomaly_detected)
+        # Dedup: only fire once per hour for the same anomaly type
+        one_hour_ago = timezone.now() - datetime.timedelta(hours=1)
+        recent_similar = AnomalyLog.objects.filter(
+            agent=agent,
+            anomaly_type=anomaly_detected,
+            detected_at__gte=one_hour_ago
+        ).exists()
+        
+        if not recent_similar:
+            logger.warning(
+                "anomaly_detected",
+                extra={**extra, "anomaly_type": anomaly_detected, "speed": speed_kmph}
+            )
+            anomaly_log = AnomalyLog.objects.create(
+                agent=agent, anomaly_type=anomaly_detected
+            )
+            push_anomaly_to_ws(agent, anomaly_detected, anomaly_log=anomaly_log)
 
     active_order = Order.objects.filter(
-        agent=agent, 
+        agent=agent,
         status__in=['picked_up', 'in_transit']
     ).first()
-    
+
     if active_order:
         dist_to_pickup = haversine(
-            current_lat, current_lng, 
+            current_lat, current_lng,
             active_order.pickup_lat, active_order.pickup_lng
         )
         dist_to_drop = haversine(
-            current_lat, current_lng, 
+            current_lat, current_lng,
             active_order.drop_lat, active_order.drop_lng
         )
         if dist_to_pickup > 2.0 and dist_to_drop > 2.0:
             logger.warning(
-                "anomaly_detected", 
+                "anomaly_detected",
                 extra={**extra, "anomaly_type": 'route_deviation', "order_id": str(active_order.id)}
             )
-            AnomalyLog.objects.create(
-                agent=agent, 
-                order=active_order, 
+            anomaly_log = AnomalyLog.objects.create(
+                agent=agent,
+                order=active_order,
                 anomaly_type='route_deviation'
             )
-            push_anomaly_to_ws(agent, 'route_deviation', active_order)
-    
+            push_anomaly_to_ws(agent, 'route_deviation', order=active_order, anomaly_log=anomaly_log)
+
     logger.info("detecting_anomalies_end", extra=extra)
 
 
@@ -122,11 +156,11 @@ def check_unreachable_agents():
     three_mins_ago = timezone.now() - datetime.timedelta(minutes=3)
     
     for order in active_orders:
-        extra = {
-            "order_id": str(order.id), 
-            "agent_id": str(order.agent.id)
-        }
         if order.agent:
+            extra = {
+                "order_id": str(order.id), 
+                "agent_id": str(order.agent.id)
+            }
             last_update = LocationUpdate.objects.filter(
                 agent=order.agent
             ).order_by('-timestamp').first()
@@ -136,9 +170,9 @@ def check_unreachable_agents():
                     "anomaly_detected", 
                     extra={**extra, "anomaly_type": 'unreachable'}
                 )
-                AnomalyLog.objects.create(
-                    agent=order.agent, 
-                    order=order, 
+                anomaly_log = AnomalyLog.objects.create(
+                    agent=order.agent,
+                    order=order,
                     anomaly_type='unreachable'
                 )
-                push_anomaly_to_ws(order.agent, 'unreachable', order)
+                push_anomaly_to_ws(order.agent, 'unreachable', order=order, anomaly_log=anomaly_log)
