@@ -14,12 +14,15 @@ class DeliveryAgent(models.Model):
     )
     current_lat = models.FloatField(null=True, blank=True)
     current_lng = models.FloatField(null=True, blank=True)
+    current_speed = models.FloatField(default=0.0)
+    battery_level = models.FloatField(default=100.0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='offline')
     fatigue_score = models.FloatField(default=0.0)
     total_km_today = models.FloatField(default=0.0)
     orders_last_4hrs = models.IntegerField(default=0)
     hours_active = models.FloatField(default=0.0)
     is_simulated = models.BooleanField(default=False)
+    is_permanent = models.BooleanField(default=False)
 
     def calculate_fatigue(self):
         """
