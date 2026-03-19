@@ -21,8 +21,8 @@ COPY . .
 # Collect static files for production
 RUN python manage.py collectstatic --noinput || true
 
-# Make startup script executable
-RUN chmod +x /app/start.sh
+# Make startup scripts executable
+RUN chmod +x /app/start.sh /app/start_celery.sh /app/start_beat.sh
 
 # Port (Render exposes $PORT environment variable)
 EXPOSE 8000
