@@ -80,7 +80,7 @@ services:
     name: trackhive-frontend
     runtime: static
     buildCommand: "cd frontend && npm install && npm run build"
-    staticPublishPath: ./frontend/dist
+    staticPublishPath: ./backend/staticfiles/dist
     envVars:
       - key: VITE_API_URL
         value: "https://trackhive-web.onrender.com"
