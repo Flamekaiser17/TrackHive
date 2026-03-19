@@ -13,16 +13,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FleetContext } from './context/FleetContext';
 import useAgents from './hooks/useAgents';
 
-const TrackHiveApp = () => {
+// Authenticated shell — hooks only run when user is logged in
+const AuthenticatedApp = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [focusedAgentId, setFocusedAgentId] = useState(null);
-  
+
   const { agents } = useAgents();
   const { unresolvedCount, orders } = useContext(FleetContext);
-  
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () => !!localStorage.getItem('access_token')
-  );
 
   const handleNavigate = (tab, agentId = null) => {
     if (tab === 'live-map') {
@@ -30,19 +27,6 @@ const TrackHiveApp = () => {
     }
     setActiveTab(tab);
   };
-
-  useEffect(() => {
-    const handleLogout = () => {
-      setIsAuthenticated(false);
-      window.location.href = '/login';
-    };
-    window.addEventListener('auth_logout', handleLogout);
-    return () => window.removeEventListener('auth_logout', handleLogout);
-  }, []);
-
-  if (!isAuthenticated) {
-    return <Login onLogin={() => setIsAuthenticated(true)} />;
-  }
 
   const renderContent = () => {
     switch(activeTab) {
@@ -81,6 +65,29 @@ const TrackHiveApp = () => {
       </main>
     </div>
   );
+};
+
+const TrackHiveApp = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(
+    () => !!localStorage.getItem('access_token')
+  );
+
+  useEffect(() => {
+    const handleLogout = () => {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      setIsAuthenticated(false);
+      // No window.location.href — React state handles it (no full reload loop)
+    };
+    window.addEventListener('auth_logout', handleLogout);
+    return () => window.removeEventListener('auth_logout', handleLogout);
+  }, []);
+
+  if (!isAuthenticated) {
+    return <Login onLogin={() => setIsAuthenticated(true)} />;
+  }
+
+  return <AuthenticatedApp />;
 };
 
 export default TrackHiveApp;
