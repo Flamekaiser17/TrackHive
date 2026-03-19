@@ -6,15 +6,14 @@ services:
     dockerContext: ./backend
     plan: free
     healthCheckPath: /api/health/
-    dockerCommand: >-
-      sh -c "python manage.py migrate &&
-             python manage.py seed_demo &&
-             daphne -b 0.0.0.0 -p $PORT config.asgi:application"
+    dockerCommand: "sh -c 'python manage.py migrate --noinput && daphne -b 0.0.0.0 -p $PORT config.asgi:application'"
     envVars:
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
         value: "False"
+      - key: DJANGO_SETTINGS_MODULE
+        value: "config.settings"
       - key: DATABASE_URL
         fromDatabase:
           name: trackhive-db
@@ -28,21 +27,21 @@ services:
         value: ".onrender.com"
       - key: CORS_ALLOWED_ORIGINS
         value: "https://trackhive-frontend.onrender.com"
-      - key: DJANGO_SETTINGS_MODULE
-        value: "config.settings.production"
 
-  - type: web
+  - type: worker
     name: trackhive-celery
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     plan: free
-    dockerCommand: "celery -A config worker --loglevel=info --concurrency=2"
+    dockerCommand: "celery -A config.celery worker --loglevel=info --concurrency=2"
     envVars:
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
         value: "False"
+      - key: DJANGO_SETTINGS_MODULE
+        value: "config.settings"
       - key: DATABASE_URL
         fromDatabase:
           name: trackhive-db
@@ -52,21 +51,21 @@ services:
           name: trackhive-redis
           type: keyvalue
           property: connectionString
-      - key: DJANGO_SETTINGS_MODULE
-        value: "config.settings.production"
 
-  - type: web
+  - type: worker
     name: trackhive-beat
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     plan: free
-    dockerCommand: "celery -A config beat --loglevel=info"
+    dockerCommand: "celery -A config.celery beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler"
     envVars:
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
         value: "False"
+      - key: DJANGO_SETTINGS_MODULE
+        value: "config.settings"
       - key: DATABASE_URL
         fromDatabase:
           name: trackhive-db
@@ -76,8 +75,6 @@ services:
           name: trackhive-redis
           type: keyvalue
           property: connectionString
-      - key: DJANGO_SETTINGS_MODULE
-        value: "config.settings.production"
 
   - type: web
     name: trackhive-frontend
