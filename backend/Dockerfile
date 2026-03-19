@@ -21,8 +21,11 @@ COPY . .
 # Collect static files for production
 RUN python manage.py collectstatic --noinput || true
 
+# Make startup script executable
+RUN chmod +x /app/start.sh
+
 # Port (Render exposes $PORT environment variable)
 EXPOSE 8000
 
 # Default command (overridden by render.yaml)
-CMD ["daphne", "-b", "0.0.0.0", "-p", "8000", "config.asgi:application"]
+CMD ["/app/start.sh"]
