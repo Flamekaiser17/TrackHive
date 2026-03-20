@@ -34,6 +34,10 @@ export const FleetProvider = ({ children }) => {
         ...a,
         lat: a.current_lat || a.lat,
         lng: a.current_lng || a.lng,
+        speed: a.current_speed || a.speed || 0,
+        battery_level: a.battery_level || 100,
+        km_today: a.total_km_today || 0,
+        orders_today: a.orders_last_4hrs || 0,
         username: a.username || a.user?.username || `Agent_${a.id}`
       }));
 
@@ -65,8 +69,8 @@ export const FleetProvider = ({ children }) => {
     if (!lastMessage) return;
 
     // 1. Handle Agent Updates
-    if (lastMessage.type === 'agent_location_update' || lastMessage.type === 'agent_status_change') {
-       if (isSimulating && lastMessage.type === 'agent_location_update') {
+    if (lastMessage.type === 'agent_location_update' || lastMessage.type === 'tracking_message' || lastMessage.type === 'agent_status_change') {
+       if (isSimulating && (lastMessage.type === 'agent_location_update' || lastMessage.type === 'tracking_message')) {
           setSimStats(prev => ({ ...prev, events: prev.events + 1 }));
        }
       setAgents(prev => {
@@ -83,10 +87,13 @@ export const FleetProvider = ({ children }) => {
         const updated = [...prev];
         updated[idx] = {
           ...updated[idx],
-          ...(lastMessage.type === 'agent_location_update' ? {
+          ...((lastMessage.type === 'agent_location_update' || lastMessage.type === 'tracking_message') ? {
             lat: parseFloat(lastMessage.lat),
             lng: parseFloat(lastMessage.lng),
             speed: parseFloat(lastMessage.speed || updated[idx].speed),
+            battery_level: parseFloat(lastMessage.battery || updated[idx].battery_level),
+            km_today: parseFloat(lastMessage.km_today || updated[idx].km_today || 0),
+            orders_today: parseInt(lastMessage.orders_today || updated[idx].orders_today || 0, 10),
           } : {
             status: lastMessage.status
           })

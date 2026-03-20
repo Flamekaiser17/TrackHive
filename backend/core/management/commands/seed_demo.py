@@ -16,47 +16,80 @@ class Command(BaseCommand):
     help = "Seeds the database with professional demo data for interviews."
 
     def handle(self, *args, **options):
-        # IDEMPOTENT: Only seed if database is empty
-        if User.objects.exists():
-            self.stdout.write(self.style.WARNING("⚠️ Database already has data. Skipping demo seed."))
-            return
-
-        self.stdout.write("🏗️ Seeding TrackHive Demo data...")
+        self.stdout.write("🏗️ Ensuring TrackHive Admin & Demo data...")
         
-        # 2. Create Admin
-        admin = User.objects.create_superuser(
-            username='admin@trackhive.com',
+        # 2. Create or Update Admin
+        admin, created = User.objects.get_or_create(
             email='admin@trackhive.com',
-            password='TrackHive@2024',
-            role='admin'
+            defaults={
+                'username': 'admin@trackhive.com',
+                'is_staff': True,
+                'is_superuser': True,
+                'role': 'admin'
+            }
         )
+        if created:
+            admin.set_password('TrackHive@2024')
+            admin.save()
+            self.stdout.write(self.style.SUCCESS(f"✅ Admin created: admin@trackhive.com"))
+        else:
+            admin.role = 'admin'
+            admin.save()
+            self.stdout.write(self.style.SUCCESS(f"✅ Admin ensured: admin@trackhive.com"))
+
+        # Ensure demo data is always at optimal state
 
         # 3. Create 5 Agents with specific fatigue levels
         fatigues = [1.2, 4.5, 7.1, 8.8, 2.0]
         agents = []
         for i, f in enumerate(fatigues):
-            u = User.objects.create_user(
-                username=f'agent_{i+1}', 
-                email=f'agent_{i+1}@trackhive.com',
-                role='agent', 
-                password='password123'
+            username = f'agent_{i+1}'
+            u, created = User.objects.get_or_create(
+                username=username,
+                defaults={
+                    'email': f'{username}@trackhive.com',
+                    'role': 'agent'
+                }
             )
-            a = DeliveryAgent.objects.create(
+            if created:
+                u.set_password('password123')
+                u.save()
+
+            a, created = DeliveryAgent.objects.get_or_create(
                 user=u,
-                status='available' if f < 8.0 else 'busy',
-                fatigue_score=f,
-                current_lat=settings.CITY_CONFIG["lat"] + random.uniform(-0.02, 0.02),
-                current_lng=settings.CITY_CONFIG["lng"] + random.uniform(-0.02, 0.02)
+                defaults={
+                    'status': 'available' if f < 8.0 else 'busy',
+                    'fatigue_score': f,
+                    'is_permanent': True,
+                    'current_lat': settings.CITY_CONFIG["lat"] + random.uniform(-0.02, 0.02),
+                    'current_lng': settings.CITY_CONFIG["lng"] + random.uniform(-0.02, 0.02)
+                }
             )
             agents.append(a)
+        
+        # 3.1 Trigger Simulation for seeded agents immediately
+        try:
+            from simulator.tasks import simulate_agent_movement
+            from core.redis_client import redis_client
+            for a in agents:
+                task = simulate_agent_movement.delay(a.id)
+                redis_client.sadd("simulation:active_tasks", task.id)
+                a.is_simulated = True 
+                a.save()
+        except Exception as e:
+            self.stdout.write(self.style.WARNING(f"⚠️ Could not start auto-simulation: {str(e)}"))
 
         # 4. Create 10 Orders
-        customer = User.objects.create_user(
+        customer, created = User.objects.get_or_create(
             username='demo_customer', 
-            email='customer@trackhive.com',
-            role='customer', 
-            password='password123'
+            defaults={
+                'email': 'customer@trackhive.com',
+                'role': 'customer'
+            }
         )
+        if created:
+            customer.set_password('password123')
+            customer.save()
         
         # 3 created
         for _ in range(3):

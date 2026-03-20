@@ -1,203 +1,206 @@
-import { Play, Square, Terminal, Activity, Users, Zap, ShieldAlert, Cpu, Server } from 'lucide-react';
-import { motion } from 'framer-motion';
 import { useState, useEffect, useRef, useContext } from 'react';
+import { motion, AnimatePresence, animate } from 'framer-motion';
+import {
+  Zap, Play, Square, Terminal, Cpu,
+  Users, AlertTriangle, RefreshCw, Activity,
+  ChevronRight, Database, Globe
+} from 'lucide-react';
 import { startSimulation, stopSimulation } from '../api/endpoints';
 import { FleetContext } from '../context/FleetContext';
 
+/* ── Animated Number Component ───────────────────────────────── */
+const AnimatedNumber = ({ value }) => {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    if (typeof value !== 'number') return;
+    const controls = animate(displayValue, value, {
+      duration: 1,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate: (latest) => setDisplayValue(Math.floor(latest))
+    });
+    return () => controls.stop();
+  }, [value]);
+
+  return <span>{displayValue}</span>;
+};
+
+/* ── Stat Card (Titan Upgrade) ───────────────────────────────── */
+const StatCard = ({ label, value, icon: Icon, color, grad }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 12 }}
+    animate={{ opacity: 1, y: 0 }}
+    style={{
+      flex: 1, minWidth: 200, padding: '24px',
+      background: 'var(--bg-card)', border: '1px solid var(--border)',
+      borderRadius: 'var(--radius-xl)', display: 'flex', alignItems: 'center', gap: 16,
+      position: 'relative', overflow: 'hidden'
+    }}
+  >
+    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: grad }} />
+    <div style={{
+      width: 44, height: 44, borderRadius: 12,
+      background: `${color}15`, border: `1px solid ${color}30`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      boxShadow: `0 0 15px ${color}15`
+    }}>
+      <Icon size={20} color={color} />
+    </div>
+    <div>
+      <p style={{ fontSize: 10, fontWeight: 900, color: 'var(--text-faint)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{label}</p>
+      <div style={{ fontSize: 28, fontWeight: 900, color: '#fff', fontFamily: 'JetBrains Mono' }}>
+        <AnimatedNumber value={value} />
+      </div>
+    </div>
+  </motion.div>
+);
+
+/* ══════════════════════════════════════════════════════════════ */
+/*  SIMULATOR (TITAN UPGRADE)                                     */
+/* ══════════════════════════════════════════════════════════════ */
 const Simulator = () => {
-  const { 
-    isSimulating, setIsSimulating, 
-    simStats, setSimStats, 
+  const {
+    isSimulating, setIsSimulating,
+    simStats, setSimStats,
     simLogs, addSimLog,
-    connected, lastMessage 
+    connected, lastMessage,
   } = useContext(FleetContext);
 
   const [loading, setLoading] = useState(false);
+  const [agentCount, setAgentCount] = useState(50);
   const logEndRef = useRef(null);
-  
 
-  // Auto-scroll logs
   useEffect(() => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [simLogs]);
 
-  // Log throttling for UI performance
   useEffect(() => {
     if (!lastMessage || !isSimulating) return;
-    
-    if (lastMessage.type === 'agent_location_update') {
-      if (simStats.events % 20 === 0) {
-        addSimLog(
-          `Telemetry: Agent_${lastMessage.agent_id} @ ` +
-          `${Math.round(lastMessage.speed_kmph || lastMessage.speed || 0)}km/h`,
-          'info'
-        );
-      }
+    if (lastMessage.type === 'anomaly_detected') {
+      addSimLog(`CRITICAL: Node Breach @ ${lastMessage.agent_id} | CODE: ${lastMessage.anomaly_type.toUpperCase()}`, 'error');
     }
-  }, [lastMessage, isSimulating, simStats.events, addSimLog]);
+  }, [lastMessage, isSimulating, addSimLog]);
 
-  const startSim = async () => {
-    if (loading || isSimulating) return;
+  const handleStart = async () => {
     setLoading(true);
-    addSimLog('DEPLOYING 50 SIMULATED AGENTS TO BENGALURU DISTRICT...', 'success');
+    addSimLog(`INITIATING CLUSTER OVERRIDE: ${agentCount} NODES...`, 'system');
     try {
-      await startSimulation();
+      await startSimulation({ agent_count: agentCount });
       setIsSimulating(true);
-      addSimLog('Backend confirmed: 50 agents deployed', 'success');
-      setSimStats({ agents: 50, events: 0, anomalies: 0 });
-    } catch (err) {
-      addSimLog('ERROR: Failed to deploy agents — ' + (err.response?.data?.detail || err.message), 'warning');
-      console.error('Start simulation failed:', err);
-    } finally {
-      setLoading(false);
-    }
+      setSimStats({ agents: agentCount, events: 0, anomalies: 0 });
+      addSimLog(`CLUSTER ACTIVE. DATA BROADCAST SYNCED.`, 'success');
+    } catch (err) { addSimLog(`FAULT: ${err.message}`, 'error'); }
+    finally { setLoading(false); }
   };
 
-  const stopSim = async () => {
-    if (loading || !isSimulating) return;
+  const handleStop = async () => {
     setLoading(true);
-    addSimLog('HALTING ALL SIMULATED AGENTS. Cleaning up threads...', 'warning');
+    addSimLog(`SENDING TERMINATION SEQUENCE...`, 'warning');
     try {
       await stopSimulation();
       setIsSimulating(false);
-      addSimLog('Simulation terminated. Cluster status: IDLE.', 'system');
-    } catch (err) {
-      addSimLog('ERROR: Failed to stop simulation — ' + (err.response?.data?.detail || err.message), 'warning');
-      console.error('Stop simulation failed:', err);
-    } finally {
-      setLoading(false);
-    }
+      addSimLog(`CLUSTER OFFLINE. CORE IDLE.`, 'system');
+    } catch (err) { addSimLog(`FAULT: ${err.message}`, 'error'); }
+    finally { setLoading(false); }
   };
 
   return (
-    <div className="dashboard-grid">
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <div>
-          <h2 style={{ fontSize: '24px', fontWeight: '800', display: 'flex', alignItems: 'center', gap: '12px' }}>
-            Chaos Simulator <Zap size={24} color="var(--primary)" />
-          </h2>
-          <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>Stress-testing fleet orchestration and anomaly detection engines</p>
+    <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: 32, height: '100%', overflowY: 'auto' }}>
+      
+      {/* ── Top Bar HUD ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ padding: 8, background: 'var(--gradient-primary)', borderRadius: 10, boxShadow: 'var(--glow-primary)' }}>
+            <Zap size={20} color="#fff" fill="#fff" />
+          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 900, letterSpacing: '-0.5px' }}>Chaos Hub v4.2</h1>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 12px', background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border)', borderRadius: '100px' }}>
-          <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: connected ? 'var(--accent-green)' : 'var(--accent-red)' }} />
-          <span style={{ fontSize: '11px', fontWeight: '800', color: connected ? 'var(--accent-green)' : 'var(--accent-red)' }}>
-            {loading ? 'PROCESSING...' : 
-             !connected ? 'WS DISCONNECTED' :
-             isSimulating ? 'AGENT SWARM ACTIVE' : 'SYSTEM IDLE'}
-          </span>
+        
+        <div style={{ padding: '6px 14px', borderRadius: 99, background: isSimulating ? 'rgba(46,213,115,0.08)' : 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: isSimulating ? '#2ED573' : 'var(--text-faint)', animation: isSimulating ? 'blink-dot 1s infinite' : 'none' }} />
+          <span style={{ fontSize: 10, fontWeight: 900, color: isSimulating ? '#2ED573' : 'var(--text-faint)', letterSpacing: '0.1em' }}>{isSimulating ? 'SIMULATION_ACTIVE' : 'IDLE_MODE'}</span>
         </div>
-      </header>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-        {/* START */}
-        <motion.div
-          whileHover={{ scale: !isSimulating && !loading ? 1.02 : 1 }}
-          onClick={!isSimulating && !loading ? startSim : undefined}
-          style={{
-            padding: '32px',
-            background: 'linear-gradient(135deg, rgba(108, 99, 255, 0.1) 0%, rgba(108, 99, 255, 0.05) 100%)',
-            borderRadius: '24px',
-            border: '1px solid var(--primary)',
-            cursor: !isSimulating && !loading ? 'pointer' : 'not-allowed',
-            opacity: isSimulating || loading ? 0.5 : 1,
-            display: 'flex', alignItems: 'center', gap: '32px',
-            transition: 'opacity 0.3s'
-          }}
-        >
-          <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 30px var(--primary-glow)' }}>
-            <Play size={40} color="white" fill="white" />
-          </div>
-          <div>
-            <h3 style={{ fontSize: '22px', fontWeight: '800' }}>START SIMULATION</h3>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>Deploy 50 simulated agents immediately</p>
-          </div>
-        </motion.div>
-
-        {/* STOP */}
-        <motion.div
-          whileHover={{ scale: isSimulating && !loading ? 1.02 : 1 }}
-          onClick={isSimulating && !loading ? stopSim : undefined}
-          style={{
-            padding: '32px',
-            background: 'linear-gradient(135deg, rgba(255, 71, 87, 0.1) 0%, rgba(255, 71, 87, 0.05) 100%)',
-            borderRadius: '24px',
-            border: '1px solid var(--accent-red)',
-            cursor: isSimulating && !loading ? 'pointer' : 'not-allowed',
-            opacity: !isSimulating || loading ? 0.5 : 1,
-            display: 'flex', alignItems: 'center', gap: '32px',
-            transition: 'opacity 0.3s'
-          }}
-        >
-          <div style={{ width: '80px', height: '80px', borderRadius: '24px', background: 'var(--accent-red)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 30px rgba(255, 71, 87, 0.2)' }}>
-            <Square size={40} color="white" fill="white" />
-          </div>
-          <div>
-            <h3 style={{ fontSize: '22px', fontWeight: '800' }}>STOP SIMULATION</h3>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', marginTop: '4px' }}>Halt all active simulated agents</p>
-          </div>
-        </motion.div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 400px', gap: '24px', flex: 1 }}>
-        {/* CONSOLE */}
-        <div style={{ background: '#050508', border: '1px solid var(--border)', borderRadius: '20px', display: 'flex', flexDirection: 'column', overflow: 'hidden', boxShadow: 'inset 0 0 40px rgba(0,0,0,0.5)' }}>
-          <header style={{ padding: '16px 24px', background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', gap: '12px', borderBottom: '1px solid var(--border)' }}>
-            <Terminal size={16} color="var(--text-muted)" />
-            <h4 className="mono" style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '700' }}>CHAOS_KERNEL_STDOUT</h4>
-            {isSimulating && <Activity size={12} color="var(--accent-green)" />}
-          </header>
-          <div style={{ flex: 1, padding: '24px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            {simLogs.map(log => (
-              <div key={log.id} style={{ fontSize: '13px', display: 'flex', gap: '16px' }}>
-                <span className="mono" style={{ color: 'var(--text-muted)', minWidth: '85px' }}>[{log.time}]</span>
-                <span className="mono" style={{
-                  color: log.type === 'system' ? 'var(--text-muted)' :
-                    log.type === 'success' ? 'var(--accent-green)' :
-                    log.type === 'warning' ? 'var(--accent-red)' : 'var(--text-primary)'
-                }}>
-                  {log.type === 'system' ? '>> ' : log.type === 'success' ? '✔ ' : log.type === 'warning' ? '⚠ ' : '$ '}
-                  {log.msg}
-                </span>
+      {/* ── Main Controls Card ── */}
+      <div style={{ display: 'flex', justifyContent: 'center' }}>
+        <div style={{ 
+          width: '100%', maxWidth: 640, padding: '40px', background: 'var(--bg-card)', 
+          border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', position: 'relative',
+          overflow: 'hidden', textAlign: 'center'
+        }}>
+           {/* Decorative BG element */}
+           <div style={{ position: 'absolute', top: -100, left: -100, width: 200, height: 200, background: 'var(--primary)', filter: 'blur(100px)', opacity: 0.1 }} />
+
+           <div style={{ marginBottom: 32 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontSize: 11, fontWeight: 800, textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                <span>Swarm density configuration</span>
+                <span style={{ color: 'var(--primary)', fontFamily: 'JetBrains Mono' }}>{agentCount} NODES</span>
               </div>
-            ))}
-            <div ref={logEndRef} />
-          </div>
-        </div>
+              <input type="range" min="10" max="100" value={agentCount} onChange={e => setAgentCount(parseInt(e.target.value))} disabled={isSimulating} style={{ width: '100%', height: 4, background: 'var(--border)', borderRadius: 10, appearance: 'none', cursor: 'pointer', outline: 'none' }} />
+           </div>
 
-        {/* STATS */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          <div style={{ background: 'var(--surface)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)' }}>
-            <h4 style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '800', letterSpacing: '0.04em', marginBottom: '24px' }}>CLUSTER PERFORMANCE</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              {[
-                { label: 'Agents Active', value: simStats.agents, icon: Users, color: 'var(--accent-green)', bg: 'rgba(0, 229, 160, 0.1)' },
-                { label: 'Events Processed', value: simStats.events, icon: Cpu, color: 'var(--accent-blue)', bg: 'rgba(0, 180, 255, 0.1)' },
-                { label: 'Anomalies Created', value: simStats.anomalies, icon: ShieldAlert, color: 'var(--accent-red)', bg: 'rgba(255, 71, 87, 0.1)' },
-              ].map(({ label, value, icon: Icon, color, bg }) => (
-                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                    <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Icon size={16} color={color} />
-                    </div>
-                    <span style={{ fontSize: '13px', fontWeight: '700' }}>{label}</span>
-                  </div>
-                  <span className="mono" style={{ fontSize: '20px', fontWeight: '800' }}>{value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ flex: 1, background: 'var(--surface)', padding: '24px', borderRadius: '20px', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', gap: '20px' }}>
-            <Server size={64} color="var(--border)" strokeWidth={1} />
-            <div style={{ textAlign: 'center' }}>
-              <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '800' }}>ORCHESTRATION ENGINE</p>
-              <p style={{ fontSize: '14px', fontWeight: '600', marginTop: '4px' }}>
-                Worker Status: {loading ? 'PROCESSING' : isSimulating ? 'HIGH_LOAD' : 'NOMINAL'}
-              </p>
-            </div>
-          </div>
+           {!isSimulating ? (
+             <motion.button 
+               onClick={handleStart} whileTap={{ scale: 0.95 }}
+               style={{ width: '100%', padding: '18px', background: '#2ED573', borderRadius: 'var(--radius-md)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, boxShadow: '0 0 30px rgba(46,213,115,0.2)' }}
+             >
+                {loading ? <RefreshCw className="animate-spin" size={18} /> : <Play size={18} fill="#fff" />} BOOT CLUSTER
+             </motion.button>
+           ) : (
+             <motion.button 
+               onClick={handleStop} whileTap={{ scale: 0.95 }}
+               style={{ width: '100%', padding: '18px', background: 'var(--danger)', borderRadius: 'var(--radius-md)', border: 'none', color: '#fff', fontSize: 13, fontWeight: 900, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, boxShadow: '0 0 30px rgba(255,71,87,0.2)' }}
+             >
+                {loading ? <RefreshCw className="animate-spin" size={18} /> : <Square size={18} fill="#fff" />} SHUTDOWN SEQUENCE
+             </motion.button>
+           )}
         </div>
       </div>
+
+      {/* ── Live HUD Stats ── */}
+      <AnimatePresence>
+        {isSimulating && (
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 10 }} style={{ display: 'flex', gap: 20 }}>
+            <StatCard label="Live units" value={simStats.agents} icon={Users} color="#00D4AA" grad="var(--gradient-teal)" />
+            <StatCard label="Telemetry packets" value={simStats.events} icon={Globe} color="#6C63FF" grad="var(--gradient-primary)" />
+            <StatCard label="Detected anomalies" value={simStats.anomalies} icon={AlertTriangle} color="#FF4757" grad="var(--gradient-danger)" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Terminal Console (High Fidelity) ── */}
+      <div style={{ flex: 1, background: '#050508', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column' }}>
+        <div className="terminal-overlay" />
+        <div className="terminal-scan" />
+        
+        <div style={{ padding: '12px 20px', background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
+           <Terminal size={14} color="var(--text-faint)" />
+           <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-faint)', letterSpacing: '0.1em' }}>KERNAL_STDOUT_STREAM</span>
+           {isSimulating && <motion.div animate={{ opacity: [0, 1, 0] }} transition={{ duration: 1, repeat: Infinity }} style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
+             <Activity size={12} color="#2ED573" /> <span style={{ fontSize: 9, fontWeight: 900, color: '#2ED573' }}>SYNCING</span>
+           </motion.div>}
+        </div>
+
+        <div style={{ flex: 1, padding: '20px', overflowY: 'auto' }}>
+           {simLogs.slice(-50).map(log => (
+             <div key={log.id} style={{ display: 'flex', gap: 12, fontSize: 12, lineHeight: 1.8, fontFamily: 'JetBrains Mono' }}>
+               <span style={{ color: 'var(--text-faint)', minWidth: 80 }}>[{log.time}]</span>
+               <span style={{ 
+                 color: log.type === 'error' ? 'var(--danger)' : 
+                        log.type === 'warning' ? '#FFA502' : 
+                        log.type === 'success' ? '#00D4AA' : 
+                        log.type === 'info' ? '#6C63FF' : '#55556A',
+                 fontWeight: 500
+               }}>
+                 $ {log.msg}
+               </span>
+             </div>
+           ))}
+           <div ref={logEndRef} />
+        </div>
+      </div>
+
     </div>
   );
 };

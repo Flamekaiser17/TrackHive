@@ -17,10 +17,16 @@ from tracking.routing import websocket_urlpatterns
 def get_user_from_token(token_key):
     User = get_user_model()
     try:
+        # Robustly handle Bearer prefix if accidentally sent
+        if token_key.startswith('Bearer '):
+            token_key = token_key.split(' ')[1]
+            
         token = AccessToken(token_key)
         user_id = token['user_id']
-        return User.objects.get(id=user_id)
-    except Exception:
+        user = User.objects.get(id=user_id)
+        return user
+    except Exception as e:
+        print(f"ASGI_AUTH_ERROR: Token failed for user retrieval: {str(e)}")
         return AnonymousUser()
 
 
@@ -36,9 +42,12 @@ class JWTAuthMiddleware:
         token = token_list[0] if token_list else None
 
         if token:
-            scope['user'] = await get_user_from_token(token)
+            user = await get_user_from_token(token)
+            scope['user'] = user
+            print(f"ASGI_WS_CONNECT: URL={scope['path']}, User={user.email if not user.is_anonymous else 'Anonymous'}, Role={getattr(user, 'role', 'N/A')}")
         else:
             scope['user'] = AnonymousUser()
+            print(f"ASGI_WS_CONNECT: URL={scope['path']}, Reason=No Token Provided")
 
         return await self.app(scope, receive, send)
 

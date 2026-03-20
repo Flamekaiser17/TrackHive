@@ -254,10 +254,12 @@ import dj_database_url
 
 # 1. Database (RDS/Render Postgres)
 if os.environ.get('DATABASE_URL'):
+    # Only require SSL if DB_SSL_REQUIRE is explicitly 'True' (useful for Render production)
+    ssl_require = os.environ.get('DB_SSL_REQUIRE', 'False').lower() == 'true'
     DATABASES['default'] = dj_database_url.parse(
         os.environ.get('DATABASE_URL'),
         conn_max_age=600,
-        ssl_require=True
+        ssl_require=ssl_require
     )
 
 # 2. Redis & Channels

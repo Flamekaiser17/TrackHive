@@ -1,203 +1,204 @@
-import { ShieldAlert, User } from 'lucide-react';
+import { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState, useEffect } from 'react';
-import { getAnomalies, resolveAnomaly } from '../api/endpoints';
+import {
+  ShieldAlert, Zap, MapPin, Navigation,
+  WifiOff, CheckCircle2, Clock, User,
+  Trash2, RefreshCw, X, AlertTriangle,
+  Package, ChevronRight,
+} from 'lucide-react';
+import useAnomalies from '../hooks/useAnomalies';
+import { resolveAnomaly } from '../api/endpoints';
+import StatusBadge from '../components/StatusBadge';
 
+const timeAgo = (ts) => {
+  if (!ts) return '—';
+  try {
+    const secs = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
+    if (isNaN(secs) || secs < 0) return '—';
+    if (secs < 60)  return `${secs}s ago`;
+    if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+    return `${Math.floor(secs / 3600)}h ago`;
+  } catch { return '—'; }
+};
+
+const ICON_MAP = {
+  speed_anomaly:   { icon: Zap,        label: 'Speed Breach',    color: '#FF6B81', grad: 'var(--gradient-danger)' },
+  agent_stuck:     { icon: MapPin,     label: 'Unit Stationary', color: '#FFA502', grad: 'linear-gradient(135deg, #FFA502 0%, #FF6400 100%)' },
+  route_deviation: { icon: Navigation, label: 'Path Deviation',  color: '#6C63FF', grad: 'var(--gradient-primary)' },
+  unreachable:     { icon: WifiOff,    label: 'Signal Loss',     color: '#8B8BA7', grad: 'linear-gradient(135deg, #8B8BA7 0%, #55556A 100%)' },
+};
+
+const getAnomalyMeta = (type) => {
+  const key = (type || '').toLowerCase().replace(/ /g, '_');
+  return ICON_MAP[key] || { icon: AlertTriangle, label: 'Anomalous Activity', color: '#FF4757', grad: 'var(--gradient-danger)' };
+};
+
+const TABS = [
+  { id: 'all',             label: 'All events' },
+  { id: 'speed_anomaly',   label: 'Velocity' },
+  { id: 'agent_stuck',     label: 'Stasis' },
+  { id: 'route_deviation', label: 'Tactical' },
+  { id: 'unreachable',     label: 'Comm-Loss' },
+];
+
+/* ══════════════════════════════════════════════════════════════ */
+/*  ANOMALIES (TITAN UPGRADE)                                     */
+/* ══════════════════════════════════════════════════════════════ */
 const Anomalies = () => {
-  const [anomalies, setAnomalies] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { anomalies, loading, setAnomalies } = useAnomalies();
+  const [filter, setFilter] = useState('all');
+  const [resolvingIds, setResolvingIds] = useState(new Set());
+  const [resolvingAll, setResolvingAll] = useState(false);
 
-  useEffect(() => {
-    const fetchAnomalies = async () => {
-      try {
-        setLoading(true);
-        const data = await getAnomalies();
-        setAnomalies(data?.results || data || []);
-      } catch (err) {
-        console.error('Failed to load anomalies:', err);
-        setError('Failed to sync anomaly telemetry.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchAnomalies();
-  }, []);
+  const unresolved = useMemo(() => (anomalies || []).filter(a => !a.resolved), [anomalies]);
+  const filtered = useMemo(() => (filter === 'all' ? (anomalies || []) : (anomalies || []).filter(a => (a.anomaly_type || '').toLowerCase().replace(/ /g, '_') === filter)), [anomalies, filter]);
 
-  const handleResolve = async (id) => {
+  const handleResolve = useCallback(async (id) => {
+    setResolvingIds(prev => new Set(prev).add(id));
     try {
       await resolveAnomaly(id);
-      setAnomalies(prev =>
-        (prev || []).map(a =>
-          a.id === id ? { ...a, resolved: true, status: 'RESOLVED' } : a
-        )
-      );
-    } catch (err) {
-      console.error('Resolve failed:', err.response?.data);
-      alert('Failed to resolve: ' + (err.response?.data?.detail || 'Unknown error'));
-    }
-  };
+      setAnomalies(prev => prev.map(a => a.id === id ? { ...a, resolved: true } : a));
+    } catch (err) { console.error('Resolve failed:', err); }
+    finally { setResolvingIds(prev => { const next = new Set(prev); next.delete(id); return next; }); }
+  }, [setAnomalies]);
 
-  // FIXED: handleResolveAll added
-  const handleResolveAll = async () => {
+  const handleResolveAll = useCallback(async () => {
+    if (unresolved.length === 0) return;
+    setResolvingAll(true);
     try {
-      const unresolved = (anomalies || []).filter(a => !a.resolved && a.status !== 'RESOLVED');
+      // Resolve all unresolved anomalies in parallel
       await Promise.all(unresolved.map(a => resolveAnomaly(a.id)));
-      setAnomalies(prev => prev.map(a => ({ ...a, resolved: true, status: 'RESOLVED' })));
+      setAnomalies(prev => prev.map(a => ({ ...a, resolved: true })));
     } catch (err) {
-      console.error('Resolve all failed:', err.response?.data);
-      alert('Failed to resolve all: ' + (err.response?.data?.detail || 'Unknown error'));
+      console.error('Resolve All failed:', err);
+    } finally {
+      setResolvingAll(false);
     }
-  };
-
-  const activeCount = (anomalies || []).filter(a => !a.resolved && a.status !== 'RESOLVED').length || 0;
-
-  if (loading) return (
-    <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      {[1, 2, 3].map(i => (
-        <div key={i} className="skeleton-row" style={{ height: '80px', background: 'var(--surface)', borderRadius: '12px', animation: 'pulse 1.5s infinite' }} />
-      ))}
-    </div>
-  );
+  }, [unresolved, setAnomalies]);
 
   return (
-    <div className="dashboard-grid">
+    <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: 32, height: '100%', overflowY: 'auto' }}>
+      
+      {/* ── Dynamic Gradient Sweep Banner ── */}
       <AnimatePresence>
-        {activeCount > 0 && (
+        {unresolved.length > 0 && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="anomaly-alert-card"
-            style={{
-              padding: '24px',
-              background: 'linear-gradient(135deg, rgba(255, 71, 87, 0.1) 0%, rgba(108, 99, 255, 0.05) 100%)',
-              borderRadius: '16px',
-              border: '2px solid var(--accent-red)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              marginBottom: '16px'
+            initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+            style={{ 
+              borderRadius: 'var(--radius-xl)', padding: '24px 32px', display: 'flex', alignItems: 'center', gap: 16,
+              overflow: 'hidden', position: 'relative', background: '#FF4757', border: '1px solid rgba(255,255,255,0.1)'
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-              <div style={{
-                width: '56px', height: '56px', borderRadius: '16px',
-                background: 'rgba(255, 71, 87, 0.2)', border: '1px solid var(--accent-red)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <ShieldAlert size={32} color="var(--accent-red)" />
-              </div>
-              <div>
-                <h2 style={{ fontSize: '20px', fontWeight: '800', marginBottom: '4px' }}>
-                  {activeCount} ACTIVE ANOMALIES DETECTED
-                </h2>
-                <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  Immediate intervention required. System integrity at 94%.
-                </p>
-              </div>
+            <motion.div animate={{ x: ['-100%', '100%'] }} transition={{ duration: 3, repeat: Infinity, ease: 'linear' }} style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent)', zIndex: 1 }} />
+            <ShieldAlert size={24} color="#fff" style={{ position: 'relative', zIndex: 2 }} />
+            <div style={{ position: 'relative', zIndex: 2 }}>
+               <h2 style={{ fontSize: 18, fontWeight: 900, color: '#fff' }}>STATUS: CRITICAL OPS BREACH</h2>
+               <p style={{ fontSize: 13, fontWeight: 700, color: '#fff', opacity: 0.9 }}>{unresolved.length} UNRESOLVED ANOMALIES REQUIRE IMMEDIATE TACTICAL RESPONSE</p>
             </div>
-            {/* FIXED: onClick added */}
-            <button
-              onClick={handleResolveAll}
-              className="hover-scale"
-              style={{
-                padding: '12px 24px',
-                background: 'var(--accent-red)',
-                border: 'none', borderRadius: '10px',
-                color: 'white', fontWeight: '800', cursor: 'pointer',
-                boxShadow: '0 8px 16px rgba(255, 71, 87, 0.3)'
-              }}
-            >
-              RESOLVE ALL
-            </button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '16px', overflow: 'hidden' }}>
-        <header style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ fontSize: '16px' }}>Detailed Anomaly Log</h3>
-        </header>
+      {/* ── Header ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h1 style={{ fontSize: 24, fontWeight: 900, letterSpacing: '-0.4px' }}>Incident command center</h1>
+        <button 
+          onClick={handleResolveAll}
+          disabled={unresolved.length === 0 || resolvingAll} 
+          style={{ 
+            padding: '10px 24px', background: 'transparent', border: '1.5px solid var(--danger)', 
+            borderRadius: 'var(--radius-md)', color: 'var(--danger)', fontSize: 11, fontWeight: 900, 
+            cursor: (unresolved.length === 0 || resolvingAll) ? 'default' : 'pointer', 
+            transition: 'all 0.2s', opacity: (unresolved.length === 0 || resolvingAll) ? 0.3 : 1 
+          }}
+        >
+          {resolvingAll ? 'NEUTRALIZING...' : 'RESOLVE ALL INCIDENTS'}
+        </button>
+      </div>
 
-        {error && (
-          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--accent-red)' }}>{error}</div>
-        )}
+      <div style={{ display: 'flex', gap: 8, background: 'rgba(255,255,255,0.02)', padding: 4, borderRadius: 'var(--radius-lg)', border: '1px solid var(--border)', width: 'fit-content' }}>
+        {TABS.map(tab => (
+          <button key={tab.id} onClick={() => setFilter(tab.id)} style={{ padding: '8px 20px', borderRadius: 'var(--radius-md)', border: 'none', background: filter === tab.id ? 'var(--gradient-primary)' : 'transparent', color: filter === tab.id ? '#fff' : 'var(--text-faint)', fontSize: 11, fontWeight: 900, cursor: 'pointer', transition: 'all 0.2s' }}>{tab.label.toUpperCase()}</button>
+        ))}
+      </div>
 
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ background: 'rgba(0,0,0,0.1)', textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-              <th style={{ padding: '16px 24px', fontSize: '11px', color: 'var(--text-muted)' }}>TIME</th>
-              <th style={{ padding: '16px 24px', fontSize: '11px', color: 'var(--text-muted)' }}>TYPE / SEVERITY</th>
-              <th style={{ padding: '16px 24px', fontSize: '11px', color: 'var(--text-muted)' }}>AFFECTED ENTITY</th>
-              <th style={{ padding: '16px 24px', fontSize: '11px', color: 'var(--text-muted)' }}>ACTION</th>
-            </tr>
-          </thead>
-          <tbody>
-            {(anomalies || []).map((log, i) => (
-              <tr
-                key={log.id || i}
+      {/* ── Card Grid with Staggered Animations ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(440px, 1fr))', gap: 20 }}>
+        <AnimatePresence mode="popLayout">
+          {filtered.map((anomaly, idx) => {
+            const { icon: Icon, label, color, grad } = getAnomalyMeta(anomaly.anomaly_type);
+            const isResolved = anomaly.resolved;
+            const isResolving = resolvingIds.has(anomaly.id);
+
+            return (
+              <motion.div
+                key={anomaly.id} layout initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ delay: idx * 0.05, duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
                 style={{
-                  borderBottom: '1px solid var(--border)',
-                  opacity: (log.resolved || log.status === 'RESOLVED') ? 0.4 : 1
+                  background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)',
+                  padding: '24px', display: 'flex', gap: 20, position: 'relative'
                 }}
               >
-                <td className="mono" style={{ padding: '18px 24px', fontSize: '13px', color: 'var(--text-secondary)' }}>
-                  {new Date(log.detected_at || log.created_at || Date.now()).toLocaleTimeString()}
-                </td>
-                <td style={{ padding: '18px 24px' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    <span style={{ fontSize: '13px', fontWeight: '700', textTransform: 'capitalize' }}>
-                      {(log.anomaly_type || '').replace(/_/g, ' ')}
-                    </span>
-                    <span className="badge" style={{
-                      fontSize: '9px',
-                      background: 'rgba(255, 71, 87, 0.1)',
-                      color: 'var(--accent-red)',
-                      width: 'fit-content',
-                      padding: '2px 6px',
-                      borderRadius: '4px'
-                    }}>CRITICAL</span>
+                {/* Severity Left Border */}
+                <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: 4, background: isResolved ? 'var(--text-faint)' : grad, borderRadius: '24px 0 0 24px' }} />
+
+                <div style={{ 
+                  width: 54, height: 54, borderRadius: 'var(--radius-lg)', background: `${color}15`, border: `1px solid ${color}30`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: `0 0 20px ${color}15`
+                }}>
+                  <Icon size={24} color={color} />
+                </div>
+
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div>
+                      <h3 style={{ fontSize: 16, fontWeight: 900, color: '#fff', marginBottom: 2 }}>{label}</h3>
+                      <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{anomaly.agent_name || `Agent ${anomaly.agent_id}`}</p>
+                    </div>
+                    <StatusBadge value={anomaly.severity || 'high'} size="xs" />
                   </div>
-                </td>
-                <td style={{ padding: '18px 24px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <User size={14} color="var(--primary)" />
-                    <span style={{ fontSize: '13px', fontWeight: '700' }}>
-                      Agent_{log.agent_id || log.agent || 'UNK'}
-                    </span>
+
+                  <div style={{ display: 'flex', gap: 16, marginBottom: 24 }}>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-faint)', fontSize: 11, fontWeight: 700 }}>
+                        <Clock size={12} /> {timeAgo(anomaly.detected_at)}
+                     </div>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-faint)', fontSize: 11, fontWeight: 700 }}>
+                        <Package size={12} /> #{anomaly.order || 'N/A'}
+                     </div>
                   </div>
-                </td>
-                <td style={{ padding: '18px 24px' }}>
-                  {(log.resolved || log.status === 'RESOLVED') ? (
-                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700' }}>ARCHIVED</span>
-                  ) : (
-                    <button
-                      onClick={() => handleResolve(log.id)}
-                      style={{
-                        padding: '6px 14px',
-                        background: 'var(--surface-hover)',
-                        border: '1px solid var(--border)',
-                        borderRadius: '6px',
-                        fontSize: '11px', fontWeight: '800',
-                        color: 'white', cursor: 'pointer'
-                      }}
-                    >
-                      INTERVENE
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {(!loading && !error && (anomalies || []).length === 0) && (
-              <tr>
-                <td colSpan="4" style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                  ✅ All Clear — No anomalies detected
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+
+                  {/* Morphing Resolve Button */}
+                  <button
+                    onClick={() => !isResolved && handleResolve(anomaly.id)}
+                    disabled={isResolving || isResolved}
+                    style={{
+                      width: '100%', padding: '12px', background: isResolved ? 'rgba(46,213,115,0.1)' : 'var(--surface-glass)',
+                      border: isResolved ? '1.5px solid rgba(46,213,115,0.4)' : '1px solid var(--border)', borderRadius: 'var(--radius-md)',
+                      color: isResolved ? '#2ED573' : 'var(--text-primary)', fontSize: 11, fontWeight: 900,
+                      cursor: isResolved || isResolving ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+                      transition: 'all 0.3s'
+                    }}
+                  >
+                    <AnimatePresence mode="wait">
+                      {isResolved ? (
+                        <motion.div key="check" initial={{ scale: 0 }} animate={{ scale: 1 }}><CheckCircle2 size={16} /></motion.div>
+                      ) : isResolving ? (
+                        <motion.div key="spin" animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }}><RefreshCw size={16} /></motion.div>
+                      ) : (
+                        <motion.div key="text">RESOLVE THREAT</motion.div>
+                      )}
+                    </AnimatePresence>
+                    {isResolved && "THREAT NEUTRALIZED"}
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
       </div>
+
     </div>
   );
 };
 
-export default Anomalies;   
+export default Anomalies;

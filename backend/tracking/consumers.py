@@ -11,9 +11,12 @@ class TrackingConsumer(AsyncWebsocketConsumer):
         self.user = self.scope["user"]
         
         if self.user.is_anonymous:
+            print(f"WS_REJECT: TrackingConsumer connection rejected - AnonymousUser")
             await self.close()
             return
 
+        print(f"WS_CONNECT: TrackingConsumer joined by {self.user.email} (Role: {self.user.role})")
+        
         if self.user.role == 'admin':
             await self.channel_layer.group_add("admins", self.channel_name)
             
@@ -53,10 +56,13 @@ class TrackingConsumer(AsyncWebsocketConsumer):
             payload = {
                 "type": "tracking_message",
                 "data": {
-                    "agent_id": self.user.id,
+                    "agent_id": agent_profile.id,
                     "lat": lat,
                     "lng": lng,
                     "speed": speed,
+                    "battery": agent_profile.battery_level,
+                    "km_today": agent_profile.total_km_today,
+                    "orders_today": agent_profile.orders_last_4hrs,
                     "order_id": order_id
                 }
             }
@@ -73,6 +79,13 @@ class TrackingConsumer(AsyncWebsocketConsumer):
         from agents.models import DeliveryAgent
         from tracking.models import LocationUpdate
         agent_profile = DeliveryAgent.objects.get(user=self.user)
+        
+        # PERSIST: Update agent profile for list views/refresh
+        agent_profile.current_lat = lat
+        agent_profile.current_lng = lng
+        agent_profile.current_speed = speed
+        agent_profile.save()
+        
         return LocationUpdate.objects.create(
             agent=agent_profile,
             lat=lat,
@@ -103,13 +116,16 @@ class AdminConsumer(AsyncWebsocketConsumer):
         self.user = self.scope["user"]
         
         if self.user.is_anonymous:
+            print(f"WS_REJECT: AdminConsumer connection rejected - AnonymousUser")
             await self.close()
             return
 
         if self.user.role != 'admin':
+            print(f"WS_REJECT: AdminConsumer connection rejected - User {self.user.email} is NOT Admin (Role: {self.user.role})")
             await self.close()
             return
 
+        print(f"WS_CONNECT: AdminConsumer authorized for {self.user.email}")
         await self.channel_layer.group_add("admins", self.channel_name)
         await self.accept()
 

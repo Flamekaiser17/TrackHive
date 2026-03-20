@@ -57,8 +57,8 @@ export const resolveAnomaly = async (id) => {
 };
 
 // --- SIMULATOR ---
-export const startSimulation = async () => {
-  const response = await client.post('/api/simulate/start/');
+export const startSimulation = async (data) => {
+  const response = await client.post('/api/simulate/start/', data);
   return response.data;
 };
 

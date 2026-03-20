@@ -1,189 +1,218 @@
-import { Search, ShieldAlert, MapPin, Package, X } from 'lucide-react';
+import { useMemo, useState, useContext, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useState } from 'react';
-import { resetAgentFatigue } from '../api/endpoints';
+import {
+  Users, Search, Filter, MoreHorizontal,
+  MapPin, Phone, MessageSquare, History,
+  Trash2, X, ChevronRight, Activity, Map as MapIcon,
+} from 'lucide-react';
+import useAgents from '../hooks/useAgents';
+import { FleetContext } from '../context/FleetContext';
+import FatigueBar from '../components/FatigueBar';
+import StatusBadge from '../components/StatusBadge';
 
-const Fleet = ({ agents = [], orders = [], onNavigate }) => {
-  const [selectedAgent, setSelectedAgent] = useState(null);
+const FILTERS = [
+  { id: 'all',       label: 'All Agents', color: 'var(--text-muted)' },
+  { id: 'available', label: 'Available',  color: '#00D4AA' },
+  { id: 'busy',      label: 'Busy',       color: '#6C63FF' },
+  { id: 'idle',      label: 'Idle',       color: '#FFA502' },
+  { id: 'anomaly',   label: 'Critical',   color: '#FF4757' },
+];
 
-  const handleResetFatigue = async () => {
-    try {
-      if (!window.confirm('Reset fatigue for all agents?')) return;
-      await Promise.all(agents.map(a => resetAgentFatigue(a.id)));
-      alert('Fatigue reset successfully. Data will refresh shortly.');
-    } catch (err) {
-      console.error(err);
-      alert('Failed to reset fatigue.');
-    }
-  };
+const getStatusGrad = (status) => {
+  if (status === 'available') return 'var(--gradient-teal)';
+  if (status === 'busy')      return 'var(--gradient-primary)';
+  if (status === 'idle')      return 'linear-gradient(135deg, #FFA502 0%, #FF6400 100%)';
+  return                      'var(--gradient-danger)';
+};
+
+const getFatigueGrad = (score) => {
+  if (score <= 4) return 'var(--gradient-teal)';
+  if (score <= 8) return 'linear-gradient(90deg, #FFA502, #FF6400)';
+  return                'var(--gradient-danger)';
+};
+
+/* ── Agent Card (Titan Upgrade) ────────────────────────────────── */
+const AgentCard = ({ agent, onClick }) => {
+  const statusGrad = getStatusGrad(agent.status);
+  const fatigueGrad = getFatigueGrad(agent.fatigue_score);
 
   return (
-    <div className="dashboard-grid" style={{ position: 'relative' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-        <div>
-          <h2 style={{ fontSize: '24px', fontWeight: '800' }}>Fleet Management</h2>
-          <p style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>
-            Monitoring {agents.length} field agents live
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <div style={{ position: 'relative' }}>
-            <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '12px' }} />
-            <input 
-              type="text" 
-              placeholder="Search by ID or Agent Name..." 
-              style={{ padding: '10px 16px 10px 36px', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', color: 'white', fontSize: '13px', width: '320px', outline: 'none' }} 
-            />
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.9 }}
+      animate={{ opacity: 1, scale: 1 }}
+      whileHover={{ y: -8 }}
+      onClick={() => onClick(agent)}
+      style={{
+        background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)',
+        padding: '24px', cursor: 'pointer', transition: 'var(--transition-smooth)',
+        position: 'relative', overflow: 'hidden'
+      }}
+      className="agent-card-titan"
+    >
+      {/* ── Gradient Top Border ── */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: fatigueGrad }} />
+
+      {/* Avatar Container with Gradient Ring */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
+        <div style={{
+          position: 'relative', padding: 2, borderRadius: 18,
+          background: statusGrad, boxShadow: `0 0 15px ${statusGrad.split('(')[1]?.split(')')[0]?.split('0%')[0] || 'rgba(0,0,0,0.1)'}`
+        }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: 16, background: '#12121A',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 20, fontWeight: 900, color: '#fff'
+          }}>
+            {(agent.username || 'A')[0].toUpperCase()}
           </div>
-          <button onClick={handleResetFatigue} style={{ padding: '10px 16px', background: 'var(--primary)', border: 'none', borderRadius: '8px', color: 'white', fontWeight: '700', fontSize: '13px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <ShieldAlert size={16} /> RESET FATIGUE
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 800, color: '#fff', marginBottom: 4, letterSpacing: '-0.2px' }}>{agent.username}</h3>
+          <StatusBadge value={agent.status} size="xs" />
+        </div>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <FatigueBar score={agent.fatigue_score || 0} height={6} />
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+        <div style={{ flex: 1 }}>
+          <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Daily Dist.</p>
+          <p style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>{Number(agent.km_today || 0).toFixed(1)} km</p>
+        </div>
+        <div style={{ width: 1, background: 'var(--border)' }} />
+        <div style={{ flex: 1 }}>
+          <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase' }}>Orders</p>
+          <p style={{ fontSize: 14, fontWeight: 800, color: '#fff' }}>{agent.orders_today || 0}</p>
+        </div>
+      </div>
+
+      <style>{`
+        .agent-card-titan:hover {
+          border-color: rgba(255,255,255,0.15);
+          box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 20px rgba(108,99,255,0.05);
+        }
+      `}</style>
+    </motion.div>
+  );
+};
+
+/* ══════════════════════════════════════════════════════════════ */
+/*  FLEET PAGE (TITAN UPGRADE)                                    */
+/* ══════════════════════════════════════════════════════════════ */
+const Fleet = () => {
+  const { agents, loading } = useAgents();
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [selectedAgent, setSelectedAgent] = useState(null);
+
+  const filtered = useMemo(() => {
+    let list = agents || [];
+    if (filter !== 'all') list = list.filter(a => a.status === filter);
+    if (search) list = list.filter(a => a.username?.toLowerCase().includes(search.toLowerCase()));
+    return list;
+  }, [agents, search, filter]);
+
+  return (
+    <div style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: 32, height: '100%', overflowY: 'auto' }}>
+      
+      {/* ── Header HUD ── */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div>
+          <h1 style={{ fontSize: 28, fontWeight: 900, letterSpacing: '-0.8px', color: '#fff' }}>Fleet command</h1>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>Operational overview for {(agents || []).length} active units</p>
+        </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button style={{ padding: '10px 20px', background: 'var(--gradient-primary)', borderRadius: 'var(--radius-md)', color: '#fff', fontSize: 12, fontWeight: 800, border: 'none', cursor: 'pointer', boxShadow: 'var(--glow-primary)' }}>
+            NEW ENROLLMENT
           </button>
         </div>
-      </header>
+      </div>
 
-      {agents.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '80px', color: 'var(--text-muted)' }}>
-          <p style={{ fontSize: '16px', fontWeight: '700' }}>No agents found</p>
-          <p style={{ fontSize: '13px', marginTop: '8px' }}>Start the simulator to deploy agents</p>
+      {/* ── Filters Bar ── */}
+      <div style={{ display: 'flex', gap: 16, alignItems: 'center', background: 'var(--bg-card)', padding: '8px 8px 8px 16px', borderRadius: 'var(--radius-xl)', border: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+          <Search size={18} color="var(--text-faint)" />
+          <input
+            type="text"
+            placeholder="Search by agent sig..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ background: 'none', border: 'none', color: '#fff', fontSize: 13, fontWeight: 600, width: '100%', outline: 'none' }}
+          />
+        </div>
+        <div style={{ height: 24, width: 1, background: 'var(--border)' }} />
+        <div style={{ display: 'flex', gap: 4 }}>
+          {FILTERS.map(f => (
+            <button
+              key={f.id}
+              onClick={() => setFilter(f.id)}
+              style={{
+                padding: '8px 16px', borderRadius: 'var(--radius-lg)', border: 'none',
+                background: filter === f.id ? 'rgba(255,255,255,0.06)' : 'transparent',
+                color: filter === f.id ? '#fff' : 'var(--text-faint)',
+                fontSize: 12, fontWeight: 800, cursor: 'pointer', transition: 'all 0.2s'
+              }}
+            >
+              {f.label.toUpperCase()}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Grid ── */}
+      {loading ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
+          {[...Array(8)].map((_, i) => <div key={i} className="skeleton" style={{ height: 220, borderRadius: 'var(--radius-xl)' }} />)}
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+          <Users size={60} color="var(--text-faint)" />
+          <p style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-faint)' }}>NO UNITS MATCHING SPECS</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '24px' }}>
-          {agents.map((agent, i) => {
-            const name = agent.username || agent.user?.username || agent.name || `Agent_${agent.id}`;
-            const fatigue = agent.fatigue_score || 0;
-            const ordersCount = agent.orders_last_4hrs || 0;
-            const km = agent.total_km_today || 0;
-            const hours = agent.hours_active || 0;
-            const status = agent.status || 'offline';
-            
-            const color = fatigue >= 8 ? 'var(--accent-red)' 
-                        : fatigue >= 6 ? '#FF8800' 
-                        : fatigue >= 3 ? 'var(--accent-amber)' 
-                        : 'var(--accent-green)';
-
-            const statusColor = status === 'available' ? 'var(--accent-green)' 
-                              : status === 'busy' ? 'var(--accent-blue)' 
-                              : 'var(--text-muted)';
-
-            return (
-              <motion.div 
-                key={agent.id || i}
-                whileHover={{ y: -4, background: 'var(--surface-hover)' }}
-                className="stat-card"
-                style={{ padding: '0', overflow: 'hidden' }}
-              >
-                <div style={{ padding: '24px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'var(--primary-glow)', border: '1px solid var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: '800', fontSize: '18px' }}>
-                        {name.charAt(0).toUpperCase()}
-                      </div>
-                      <div>
-                        <h3 style={{ fontSize: '15px' }}>{name}</h3>
-                        <span style={{ fontSize: '10px', fontWeight: '700', color: statusColor }}>
-                          ● {status.toUpperCase()}
-                        </span>
-                      </div>
-                    </div>
-                    <div style={{ padding: '4px 8px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border)', borderRadius: '6px' }}>
-                      <span className="mono" style={{ fontSize: '10px', color: 'var(--text-muted)' }}>ID: {agent.id}</span>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <p style={{ fontSize: '18px', fontWeight: '800' }} className="mono">{ordersCount}</p>
-                      <p style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: '700' }}>ORDERS</p>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <p style={{ fontSize: '18px', fontWeight: '800' }} className="mono">{km.toFixed(1)}</p>
-                      <p style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: '700' }}>KM TODAY</p>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <p style={{ fontSize: '18px', fontWeight: '800' }} className="mono">{hours.toFixed(1)}</p>
-                      <p style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: '700' }}>HOURS</p>
-                    </div>
-                  </div>
-
-                  <div style={{ marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontWeight: '700' }}>FATIGUE SCORE</span>
-                      <span className="mono" style={{ fontSize: '11px', fontWeight: '700', color }}>{fatigue.toFixed(1)} / 10.0</span>
-                    </div>
-                    <div style={{ height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{ width: `${Math.min(fatigue * 10, 100)}%`, height: '100%', background: color }} />
-                    </div>
-                  </div>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderTop: '1px solid var(--border)', background: 'rgba(0,0,0,0.1)' }}>
-                  <button 
-                    onClick={() => onNavigate && onNavigate('live-map', agent.id)}
-                    style={{ padding: '12px', background: 'none', border: 'none', borderRight: '1px solid var(--border)', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                  >
-                    <MapPin size={12} /> VIEW ON MAP
-                  </button>
-                  <button 
-                    onClick={() => setSelectedAgent(agent)}
-                    style={{ padding: '12px', background: 'none', border: 'none', color: 'var(--text-secondary)', fontSize: '11px', fontWeight: '800', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                  >
-                    <Package size={12} /> ORDER HISTORY
-                  </button>
-                </div>
-              </motion.div>
-            );
-          })}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
+          {filtered.map(agent => <AgentCard key={agent.id} agent={agent} onClick={setSelectedAgent} />)}
         </div>
       )}
 
-      {/* Modal Overlay */}
+      {/* ── Right Panel (Details Placeholder) ── */}
       <AnimatePresence>
         {selectedAgent && (
-          <motion.div 
-            initial={{ opacity: 0 }} 
-            animate={{ opacity: 1 }} 
-            exit={{ opacity: 0 }}
-            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            onClick={() => setSelectedAgent(null)}
-          >
-            <motion.div 
-              initial={{ scale: 0.95 }} 
-              animate={{ scale: 1 }} 
-              exit={{ scale: 0.95 }}
-              onClick={e => e.stopPropagation()}
-              style={{ background: 'var(--surface)', padding: '24px', borderRadius: '16px', width: '500px', border: '1px solid var(--border)' }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h3 style={{ fontSize: '18px', fontWeight: '800' }}>Order History - {selectedAgent.user?.username || selectedAgent.name || `Agent_${selectedAgent.id}`}</h3>
-                <button onClick={() => setSelectedAgent(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}><X size={20} /></button>
-              </div>
-              
-              <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-                {orders.filter(o => o.agent === selectedAgent.id).length === 0 ? (
-                  <p style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '40px 0' }}>No active orders found for this agent.</p>
-                ) : (
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', background: 'rgba(0,0,0,0.1)' }}>
-                        <th style={{ padding: '12px', fontSize: '11px', color: 'var(--text-muted)' }}>ORDER ID</th>
-                        <th style={{ padding: '12px', fontSize: '11px', color: 'var(--text-muted)' }}>STATUS</th>
-                        <th style={{ padding: '12px', fontSize: '11px', color: 'var(--text-muted)' }}>ETA</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orders.filter(o => o.agent === selectedAgent.id).map(order => (
-                        <tr key={order.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                          <td style={{ padding: '12px', fontSize: '13px', fontWeight: '700' }} className="mono">#OR-{order.id}</td>
-                          <td style={{ padding: '12px', fontSize: '12px' }}>{order.status}</td>
-                          <td style={{ padding: '12px', fontSize: '13px' }} className="mono">{order.eta_minutes || '-'}m</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 2000 }}>
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedAgent(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
+             <motion.div
+               initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+               style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 440, background: '#12121A', borderLeft: '1px solid var(--border)', padding: '32px' }}
+             >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
+                   <h2 style={{ fontSize: 24, fontWeight: 900 }}>Unit detail</h2>
+                   <button onClick={() => setSelectedAgent(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)' }}><X size={24} /></button>
+                </div>
+                {/* Simplified Titan Detail View */}
+                <div style={{ width: 80, height: 80, borderRadius: 24, background: 'var(--gradient-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 900, color: '#fff', marginBottom: 20 }}>{(selectedAgent.username || 'A')[0].toUpperCase()}</div>
+                <h3 style={{ fontSize: 28, fontWeight: 900, marginBottom: 4 }}>{selectedAgent.username}</h3>
+                <p style={{ color: 'var(--text-muted)', marginBottom: 24, fontWeight: 600 }}>Active operational entity since Mar 2024</p>
+                
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 32 }}>
+                   <div style={{ padding: '20px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
+                      <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: 8 }}>Speed rating</p>
+                      <p style={{ fontSize: 20, fontWeight: 900, color: '#fff' }}>{selectedAgent.speed} km/h</p>
+                   </div>
+                   <div style={{ padding: '20px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
+                      <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: 8 }}>Orders handled</p>
+                      <p style={{ fontSize: 20, fontWeight: 900, color: '#fff' }}>{selectedAgent.orders_today}</p>
+                   </div>
+                </div>
+
+                <div style={{ padding: '24px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)' }}>
+                   <p style={{ fontSize: 11, fontWeight: 900, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: 12 }}>SYSTEM INTEGRITY (FATIGUE)</p>
+                   <FatigueBar score={selectedAgent.fatigue_score} height={10} />
+                </div>
+             </motion.div>
+          </div>
         )}
       </AnimatePresence>
     </div>
