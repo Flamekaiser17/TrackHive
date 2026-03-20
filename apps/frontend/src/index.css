@@ -1,0 +1,245 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* ─── Design System Tokens (Titan Upgrade) ─────────────────── */
+:root {
+  --bg-primary:    #0A0A0F;
+  --bg-secondary:  #12121A;
+  --bg-card:       #1A1A26;
+  --border:        #2A2A3A;
+
+  --primary:        #6C63FF;
+  --teal:           #00D4AA;
+  --danger:         #FF4757;
+  --warning:        #FFA502;
+  --success:        #2ED573;
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #6C63FF 0%, #9B8FFF 100%);
+  --gradient-teal:    linear-gradient(135deg, #00D4AA 0%, #00F5C4 100%);
+  --gradient-danger:  linear-gradient(135deg, #FF4757 0%, #FF6B81 100%);
+
+  /* Surface / Glass */
+  --surface-glass: rgba(255, 255, 255, 0.03);
+  --surface-hover: rgba(255, 255, 255, 0.06);
+
+  /* Glows */
+  --glow-primary: 0 0 40px rgba(108, 99, 255, 0.15);
+  --glow-teal:    0 0 40px rgba(0, 212, 170, 0.15);
+  --glow-danger:  0 0 40px rgba(255, 71, 87, 0.15);
+
+  /* Text Colors (Titan Refinement) */
+  --text-primary:   #FFFFFF;
+  --text-secondary: #A1A1AA;
+  --text-muted:     #71717A;
+  --text-faint:     #3F3F46;
+
+  /* Spacing / Radii (Titan Standard) */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Transitions */
+  --transition-fast:   all 0.1s ease;
+  --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Global Reset ─────────────────────────────────────────── */
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  width: 100%;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+}
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+
+/* ─── Scrollbar ────────────────────────────────────────────── */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--border); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #3A3A50; }
+
+/* ─── App Layout ───────────────────────────────────────────── */
+.app-layout {
+  display: grid;
+  grid-template-areas:
+    "sidebar navbar"
+    "sidebar main";
+  grid-template-rows: 64px 1fr;
+  grid-template-columns: 240px 1fr;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.navbar-area  { grid-area: navbar; }
+.sidebar-area { grid-area: sidebar; }
+.main-area    { grid-area: main; overflow-y: auto; height: 100%; }
+
+/* ─── Glassmorphism ────────────────────────────────────────── */
+.glass {
+  background: var(--surface-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+}
+
+/* ─── Animations ───────────────────────────────────────────── */
+@keyframes pulse-ring {
+  0%   { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 var(--ring-color, rgba(108,99,255,0.6)); }
+  70%  { transform: scale(1);    opacity: 1;   box-shadow: 0 0 0 10px transparent; }
+  100% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 transparent; }
+}
+
+@keyframes critical-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255,71,87,0.3) }
+  70% { box-shadow: 0 0 0 8px rgba(255,71,87,0) }
+  100% { box-shadow: 0 0 0 0 rgba(255,71,87,0) }
+}
+
+@keyframes map-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(108,99,255,0.6); }
+  70% { box-shadow: 0 0 0 16px rgba(108,99,255,0); }
+  100% { box-shadow: 0 0 0 0 rgba(108,99,255,0); }
+}
+
+@keyframes blink-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.3; transform: scale(0.85); }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes slideRight {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes marker-glow-pulse {
+  0%   { transform: scale(1); box-shadow: 0 0 0 0 var(--marker-color, rgba(108,99,255,0.4)); opacity: 0.8; }
+  100% { transform: scale(2); box-shadow: 0 0 0 15px transparent; opacity: 0; }
+}
+
+@keyframes scanline {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+/* ─── Utility classes ──────────────────────────────────────── */
+.stat-card-base {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  position: relative;
+  overflow: hidden;
+  transition: var(--transition-smooth);
+}
+
+.pulsing-green {
+  animation: pulse-ring 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  --ring-color: rgba(46, 213, 115, 0.4);
+}
+
+.pulsing-red {
+  animation: pulse-ring 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  --ring-color: rgba(255, 71, 87, 0.4);
+}
+
+.blink { animation: blink-dot 2s ease infinite; }
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--bg-card) 25%,
+    var(--surface-hover) 50%,
+    var(--bg-card) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+  border-radius: var(--radius-sm);
+}
+
+.fade-up  { animation: fadeUp    0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.slide-in { animation: slideRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* ─── Map markers ──────────────────────────────────────────── */
+.marker-glow {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  animation: marker-glow-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background-color: #0A0A0F !important;
+}
+
+.agent-pulse {
+  animation: map-pulse 1.5s ease-out infinite !important;
+  border-radius: 50%;
+}
+
+/* ─── TerminalScanline ─────────────────────────────────────── */
+.terminal-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%,
+    rgba(0, 0, 0, 0.1) 50%
+  );
+  background-size: 100% 4px;
+  z-index: 2;
+}
+
+.terminal-scan {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 100px;
+  background: linear-gradient(to bottom, transparent, rgba(108, 99, 255, 0.05), transparent);
+  animation: scanline 6s linear infinite;
+  z-index: 3;
+}
+
+/* ─── Responsive media queries ──────────────────────────────── */
+@media (max-width: 900px) {
+  .app-layout {
+    grid-template-areas:
+      "navbar navbar"
+      "main   main";
+    grid-template-columns: 1fr;
+    grid-template-rows: 60px 1fr;
+  }
+  .sidebar-area { display: none; }
+}
+
+@media (max-width: 640px) {
+  .kpi-grid { grid-template-columns: 1fr 1fr !important; }
+}
