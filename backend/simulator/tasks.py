@@ -88,9 +88,16 @@ def simulate_agent_movement(self, agent_id):
         )
 
     active_order = Order.objects.filter(agent=agent, status__in=['picked_up', 'in_transit']).first()
-    detect_anomalies_task.delay(agent.id, new_lat, new_lng, speed, order_id=active_order.id if active_order else None)
+    try:
+        # Run synchronously to avoid queued delay and ensure the new code executes
+        detect_anomalies_task(agent.id, new_lat, new_lng, speed, order_id=active_order.id if active_order else None)
+    except Exception as e:
+        logger.error(f"Simulator Anomaly Check Failed: {e}", exc_info=True)
     
     if active_order:
-        calculate_and_push_eta(active_order.id, new_lat, new_lng, speed)
+        try:
+            calculate_and_push_eta(active_order.id, new_lat, new_lng, speed)
+        except Exception as e:
+            logger.error(f"Simulator ETA Check Failed: {e}", exc_info=True)
 
     raise self.retry(countdown=2.0)
