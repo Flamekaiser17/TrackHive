@@ -79,7 +79,7 @@ class Command(BaseCommand):
         except Exception as e:
             self.stdout.write(self.style.WARNING(f"⚠️ Could not start auto-simulation: {str(e)}"))
 
-        # 4. Create 10 Orders
+        # 4. Create 10 Orders (Only if they don't exist)
         customer, created = User.objects.get_or_create(
             username='demo_customer', 
             defaults={
@@ -91,37 +91,41 @@ class Command(BaseCommand):
             customer.set_password('password123')
             customer.save()
         
-        # 3 created
-        for _ in range(3):
-            Order.objects.create(customer=customer, status='created', pickup_lat=19.05, pickup_lng=72.85, drop_lat=19.09, drop_lng=72.89)
+        if not Order.objects.filter(customer=customer).exists():
+            self.stdout.write("📦 Creating initial demo orders...")
+            # 3 created
+            for _ in range(3):
+                Order.objects.create(customer=customer, status='created', pickup_lat=12.97, pickup_lng=77.59, drop_lat=12.91, drop_lng=77.62)
 
-        # 3 assigned
-        for i in range(3):
-            Order.objects.create(customer=customer, agent=agents[i], status='assigned', pickup_lat=19.05, pickup_lng=72.85, drop_lat=19.09, drop_lng=72.89)
+            # 3 assigned
+            for i in range(3):
+                Order.objects.create(customer=customer, agent=agents[i], status='assigned', pickup_lat=12.98, pickup_lng=77.61, drop_lat=12.92, drop_lng=77.58)
 
-        # 2 in_transit (with history)
-        for i in range(2):
-            order = Order.objects.create(
-                customer=customer, agent=agents[i], status='in_transit', 
-                pickup_lat=19.05, pickup_lng=72.85, drop_lat=19.09, drop_lng=72.89
-            )
-            # Add movement trail
-            for j in range(5):
-                LocationUpdate.objects.create(
-                    agent=agents[i],
-                    lat=19.05 + (j * 0.005),
-                    lng=72.85 + (j * 0.005),
-                    speed_kmph=35.0,
-                    timestamp=timezone.now() - datetime.timedelta(minutes=(5-j))
+            # 2 in_transit (with history)
+            for i in range(2):
+                order = Order.objects.create(
+                    customer=customer, agent=agents[i], status='in_transit', 
+                    pickup_lat=12.99, pickup_lng=77.63, drop_lat=12.93, drop_lng=77.57
                 )
+                # Add movement trail
+                for j in range(5):
+                    LocationUpdate.objects.create(
+                        agent=agents[i],
+                        lat=12.99 + (j * 0.005),
+                        lng=77.63 + (j * 0.005),
+                        speed_kmph=35.0,
+                        timestamp=timezone.now() - datetime.timedelta(minutes=(5-j))
+                    )
 
-        # 2 delivered
-        for i in range(2):
-             Order.objects.create(customer=customer, agent=agents[i], status='delivered', pickup_lat=19.05, pickup_lng=72.85, drop_lat=19.09, drop_lng=72.89)
+            # 2 delivered
+            for i in range(2):
+                 Order.objects.create(customer=customer, agent=agents[i], status='delivered', pickup_lat=12.96, pickup_lng=77.60, drop_lat=12.90, drop_lng=77.64)
 
-        # 5. Create Sample Anomalies
-        AnomalyLog.objects.create(agent=agents[0], anomaly_type='speed_anomaly', resolved=True)
-        AnomalyLog.objects.create(agent=agents[1], anomaly_type='agent_stuck', resolved=False)
-        AnomalyLog.objects.create(agent=agents[2], anomaly_type='route_deviation', resolved=True)
+        # 5. Create Sample Anomalies (Only if they don't exist)
+        if not AnomalyLog.objects.exists():
+            self.stdout.write("⚠️ Creating initial anomaly logs...")
+            AnomalyLog.objects.create(agent=agents[0], anomaly_type='speed_anomaly', resolved=True)
+            AnomalyLog.objects.create(agent=agents[1], anomaly_type='agent_stuck', resolved=False)
+            AnomalyLog.objects.create(agent=agents[2], anomaly_type='route_deviation', resolved=True)
 
         self.stdout.write(self.style.SUCCESS("✅ Demo Seeded Successfully!"))
