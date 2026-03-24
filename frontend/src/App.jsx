@@ -61,8 +61,8 @@ const TrackHiveApp = () => {
         return;
       }
       try {
-        const { getHealth } = await import('./api/endpoints');
-        await getHealth();
+        const { getProfile } = await import('./api/endpoints');
+        await getProfile();
         setIsAuthenticated(true);
       } catch (err) {
         localStorage.removeItem('access_token');

@@ -15,6 +15,11 @@ export const loginUser = async (email, password) => {
   return response.data;
 };
 
+export const getProfile = async () => {
+  const response = await client.get('/api/auth/profile/');
+  return response.data;
+};
+
 // --- AGENTS / FLEET ---
 export const getAgents = async (params = {}) => {
   const response = await client.get('/api/agents/', { params });

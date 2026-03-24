@@ -78,10 +78,13 @@ class Command(BaseCommand):
             from simulator.tasks import simulate_agent_movement
             from core.redis_client import redis_client
             for a in agents:
+                # Ensure flag is set BEFORE task starts to avoid race condition
+                a.is_simulated = True
+                a.save()
+                
+                from simulator.tasks import simulate_agent_movement
                 task = simulate_agent_movement.delay(a.id)
                 redis_client.sadd("simulation:active_tasks", task.id)
-                a.is_simulated = True 
-                a.save()
         except Exception as e:
             self.stdout.write(self.style.WARNING(f"⚠️ Could not start auto-simulation: {str(e)}"))
 
