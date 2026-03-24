@@ -41,14 +41,16 @@ def simulate_agent_movement(self, agent_id):
         distance = math.sqrt((new_lat - old_lat)**2 + (new_lng - old_lng)**2) * 111
         agent.total_km_today += distance
     
-    agent.battery_level = max(5.0, agent.battery_level - random.uniform(0.1, 0.3))
+    if hasattr(agent, 'battery_level'):
+        agent.battery_level = max(5.0, agent.battery_level - random.uniform(0.1, 0.3))
     if random.random() < 0.05:
         agent.orders_last_4hrs += 1
 
     agent.current_lat = new_lat
     agent.current_lng = new_lng
     speed = random.uniform(20, 60)
-    agent.current_speed = speed
+    if hasattr(agent, 'current_speed'):
+        agent.current_speed = speed
     agent.save()
 
     LocationUpdate.objects.create(
@@ -56,20 +58,24 @@ def simulate_agent_movement(self, agent_id):
     )
     redis_client.geoadd("agents_locations", (new_lng, new_lat, agent.id))
 
-    # ISSUE 2: EXACT PAYLOAD WITH CASTING FOR FRONTEND SYNC
+    # Broadcast full telemetry to admins group for frontend Activity Stream
     if channel_layer:
         async_to_sync(channel_layer.group_send)(
-            "admins", # Keep "admins" since consumers join this group
+            "admins",
             {
                 "type": "tracking_message",
                 "data": {
                     "agent_id": agent.id,
+                    "agent_name": agent.user.username if hasattr(agent, 'user') and agent.user else f"Agent_{agent.id}",
                     "lat": float(new_lat),
                     "lng": float(new_lng),
                     "speed": round(float(speed), 1),
+                    "speed_kmph": round(float(speed), 1),
                     "distance": round(float(agent.total_km_today), 2),
+                    "km_today": round(float(agent.total_km_today), 2),
                     "status": agent.status,
                     "fatigue_score": float(agent.fatigue_score),
+                    "orders_today": int(agent.orders_last_4hrs),
                     "timestamp": timezone.now().isoformat()
                 }
             }

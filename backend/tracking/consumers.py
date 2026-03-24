@@ -161,7 +161,13 @@ class AdminConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps(payload))
 
     async def anomaly_alert(self, event):
+        data = event.get("data", event)
         await self.send(text_data=json.dumps({
             "type": "anomaly_detected",
-            **event["data"]
+            "agent_id": data.get("agent_id"),
+            "anomaly_type": data.get("anomaly_type"),
+            "order_id": data.get("order_id"),
+            "detected_at": data.get("detected_at"),
+            "id": data.get("id"),
+            "resolved": False
         }))

@@ -24,22 +24,13 @@ class SimulateStartView(APIView):
             agent_count = request.data.get('agent_count', 50)
             order_count = request.data.get('order_count', 200)
 
-            # 1. Start simulation for EXISTING (seeded) agents first
-            existing_agents = DeliveryAgent.objects.filter(is_simulated=False)
-            for agent in existing_agents:
-                task = simulate_agent_movement.delay(agent.id)
-                redis_client.sadd("simulation:active_tasks", task.id)
-                # Temporarily mark as simulated so they are cleaned up or handled correctly
-                agent.is_simulated = True 
-                agent.save()
-
-            # 2. Create NEW simulated agents as requested
+            # Create NEW simulated agents only — never touch real agents
             for i in range(agent_count):
                 uid = random.randint(1000, 9999)
                 username = f'sim_agent_{i}_{uid}'
                 user = User.objects.create(
-                    username=username, 
-                    email=f"{username}@trackhive.com",
+                    username=username,
+                    email=f"{username}@sim.trackhive.com",
                     role='agent'
                 )
                 agent = DeliveryAgent.objects.create(
@@ -47,7 +38,11 @@ class SimulateStartView(APIView):
                     status='available',
                     current_lat=CITY_CONFIG["lat"] + random.uniform(-0.05, 0.05),
                     current_lng=CITY_CONFIG["lng"] + random.uniform(-0.05, 0.05),
-                    is_simulated=True
+                    is_simulated=True,
+                    fatigue_score=0.0,
+                    total_km_today=0.0,
+                    orders_last_4hrs=0,
+                    hours_active=0.0
                 )
                 task = simulate_agent_movement.delay(agent.id)
                 redis_client.sadd("simulation:active_tasks", task.id)
@@ -100,10 +95,17 @@ class SimulateStopView(APIView):
                 except Exception:
                     pass
 
-            # 2. Get simulated agents
-            simulated_agents = DeliveryAgent.objects.filter(
+            # 2. Safety: unmark any real agents accidentally flagged as simulated
+            DeliveryAgent.objects.filter(
                 is_simulated=True,
-                is_permanent=False
+                user__email__endswith='@trackhive.com'
+            ).exclude(
+                user__email__endswith='@sim.trackhive.com'
+            ).update(is_simulated=False)
+
+            # 3. Get only true simulated agents (created by simulator)
+            simulated_agents = DeliveryAgent.objects.filter(
+                is_simulated=True
             ).select_related('user')
 
             # 3. Remove from Redis GEO

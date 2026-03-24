@@ -20,19 +20,30 @@ class Command(BaseCommand):
         
         from django.contrib.auth import get_user_model
         from agents.models import DeliveryAgent
+        from tracking.models import LocationUpdate
+
         User = get_user_model()
 
-        # Cleanup leftover sim data from previous aborted or parallel runs
-        User.objects.filter(username__startswith='sim_agent_').delete()
+        # Step 1 — Delete child records first to avoid ForeignKeyViolation
+        sim_agent_users = User.objects.filter(username__startswith='sim_agent_')
+        sim_agent_ids = list(DeliveryAgent.objects.filter(user__in=sim_agent_users).values_list('id', flat=True))
+        if sim_agent_ids:
+            LocationUpdate.objects.filter(agent_id__in=sim_agent_ids).delete()
+
+        # Step 2 — Now safe to delete agents
+        sim_agent_users.delete()
+
+        # Step 3 — Delete sim customers
         User.objects.filter(username__startswith='sim_customer_').delete()
 
+        # Step 4 — Reset fatigue on remaining real agents
         DeliveryAgent.objects.all().update(
             fatigue_score=0,
             total_km_today=0,
             orders_last_4hrs=0,
             hours_active=0
         )
-        print("Cleanup done — sim agents removed, fatigue reset")
+        print("Cleanup done")
         
         # 2. Create or Update Admin
         admin, created = User.objects.get_or_create(
