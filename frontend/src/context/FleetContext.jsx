@@ -45,19 +45,13 @@ export const FleetProvider = ({ children }) => {
       setOrders(Array.isArray(oData) ? oData : (oData.results || []));
       setAnomalies(Array.isArray(anData) ? anData : (anData.results || []));
       setError(null);
-      if (ws) {
-        ws.onerror = (error) => {
-          console.error('WS_SOCKET_ERROR: Connection failed on the simulation cluster.', error);
-          // Don't close immediately, let onclose handle the retry logic
-        };
-      }
     } catch (err) {
       console.error('FLEET_SYNC_ERROR: Global fetch failed.', err);
       setError('Telemetry sync interrupted.');
     } finally {
       setLoading(false);
     }
-  }, [ws]);
+  }, []);
 
   const addSimLog = useCallback((msg, type = 'info') => {
     const time = new Date().toLocaleTimeString('en-IN', { hour12: false });

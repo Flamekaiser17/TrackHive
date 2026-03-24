@@ -71,20 +71,15 @@ def simulate_agent_movement(self, agent_id):
     payload = {
         "type": "tracking_message",
         "agent_id": agent.id,
+        "agent_name": getattr(agent.user, 'username', f"Agent_{agent.id}"),
+        "lat": new_lat,
+        "lng": new_lng,
+        "speed": loc_update.speed_kmph,
+        "battery": agent.battery_level,
+        "km_today": agent.total_km_today,
+        "orders_today": agent.orders_last_4hrs,
         "fatigue_score": agent.fatigue_score,
-        "status": agent.status,
-        "data": {
-            "agent_id": agent.id,
-            "agent_name": getattr(agent.user, 'username', f"Agent_{agent.id}"),
-            "lat": new_lat,
-            "lng": new_lng,
-            "speed": loc_update.speed_kmph,
-            "battery": agent.battery_level,
-            "km_today": agent.total_km_today,
-            "orders_today": agent.orders_last_4hrs,
-            "fatigue_score": agent.fatigue_score,
-            "status": agent.status
-        }
+        "status": agent.status
     }
     async_to_sync(channel_layer.group_send)("admins", payload)
 
