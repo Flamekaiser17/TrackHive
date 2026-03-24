@@ -65,6 +65,12 @@ class Command(BaseCommand):
                     'current_lng': settings.CITY_CONFIG["lng"] + random.uniform(-0.02, 0.02)
                 }
             )
+            if not created:
+                # Ensure they are permanent if they already existed from old runs
+                a.is_permanent = True
+                a.status = 'available' if f < 8.0 else 'busy'
+                a.fatigue_score = f
+                a.save()
             agents.append(a)
         
         # 3.1 Trigger Simulation for seeded agents immediately
