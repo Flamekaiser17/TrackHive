@@ -77,11 +77,12 @@ def detect_anomalies_task(agent_id, current_lat, current_lng,
 
     # High fatigue check (fatigue_score >= 8 is critical)
     if agent.fatigue_score >= 8.0:
-        # Dedup: only fire once — skip if unresolved high_fatigue already exists
+        # Dedup: only fire once per hour to prevent spam after neutralize
+        one_hour_ago = timezone.now() - datetime.timedelta(hours=1)
         already_flagged = AnomalyLog.objects.filter(
             agent=agent,
             anomaly_type='high_fatigue',
-            resolved=False
+            detected_at__gte=one_hour_ago
         ).exists()
         if not already_flagged:
             logger.warning(
@@ -94,14 +95,23 @@ def detect_anomalies_task(agent_id, current_lat, current_lng,
             push_anomaly_to_ws(agent, 'high_fatigue', anomaly_log=fatigue_log)
 
     if anomaly_detected:
-        logger.warning(
-            "anomaly_detected",
-            extra={**extra, "anomaly_type": anomaly_detected, "speed": speed_kmph}
-        )
-        anomaly_log = AnomalyLog.objects.create(
-            agent=agent, anomaly_type=anomaly_detected
-        )
-        push_anomaly_to_ws(agent, anomaly_detected, anomaly_log=anomaly_log)
+        # Dedup: only fire once per hour for the same anomaly type
+        one_hour_ago = timezone.now() - datetime.timedelta(hours=1)
+        recent_similar = AnomalyLog.objects.filter(
+            agent=agent,
+            anomaly_type=anomaly_detected,
+            detected_at__gte=one_hour_ago
+        ).exists()
+        
+        if not recent_similar:
+            logger.warning(
+                "anomaly_detected",
+                extra={**extra, "anomaly_type": anomaly_detected, "speed": speed_kmph}
+            )
+            anomaly_log = AnomalyLog.objects.create(
+                agent=agent, anomaly_type=anomaly_detected
+            )
+            push_anomaly_to_ws(agent, anomaly_detected, anomaly_log=anomaly_log)
 
     active_order = Order.objects.filter(
         agent=agent,
