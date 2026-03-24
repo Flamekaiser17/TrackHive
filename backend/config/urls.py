@@ -21,4 +21,5 @@ urlpatterns = [
     path('api/tracking/', include('tracking.urls')),
     path('api/simulate/', include('simulator.urls')),
     path('api/health/', health_check, name='health-check'),
+    path('', health_check, name='root-health'),
 ]

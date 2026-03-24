@@ -5,7 +5,7 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     plan: free
-    healthCheckPath: /api/health/
+    healthCheckPath: /
     dockerCommand: "/app/start.sh"
     envVars:
       - key: SECRET_KEY
@@ -30,12 +30,13 @@ services:
       - key: DB_SSL_REQUIRE
         value: "True"
 
-  - type: worker
+  - type: web
     name: trackhive-celery
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     plan: free
+    healthCheckPath: /
     dockerCommand: "/app/start_celery.sh"
     envVars:
       - key: SECRET_KEY
@@ -56,12 +57,13 @@ services:
       - key: DB_SSL_REQUIRE
         value: "True"
 
-  - type: worker
+  - type: web
     name: trackhive-beat
     runtime: docker
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     plan: free
+    healthCheckPath: /
     dockerCommand: "/app/start_beat.sh"
     envVars:
       - key: SECRET_KEY
