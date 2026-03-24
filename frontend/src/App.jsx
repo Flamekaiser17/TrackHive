@@ -11,8 +11,8 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import { FleetContext } from './context/FleetContext';
 import useAgents from './hooks/useAgents';
+import { getProfile } from './api/endpoints';
 
-// Authenticated shell — hooks only run when user is logged in
 const AuthenticatedApp = () => {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [focusedAgentId, setFocusedAgentId] = useState(null);
@@ -61,7 +61,6 @@ const TrackHiveApp = () => {
         return;
       }
       try {
-        const { getProfile } = await import('./api/endpoints');
         await getProfile();
         setIsAuthenticated(true);
       } catch (err) {

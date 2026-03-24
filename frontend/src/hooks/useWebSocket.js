@@ -20,9 +20,15 @@ const useWebSocket = () => {
     }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const WS_BASE = import.meta.env.VITE_WS_URL || `${protocol}//${host}`;
-    const url = `${WS_BASE}/ws/admin/?token=${token}`;
+    
+    // Safely derive backend host for WebSockets
+    let backendHost = import.meta.env.VITE_WS_URL;
+    if (!backendHost) {
+      const apiBase = import.meta.env.VITE_API_URL || window.location.origin;
+      backendHost = apiBase.replace(/^http/, 'ws');
+    }
+    
+    const url = `${backendHost}/ws/admin/?token=${token}`;
     const ws = new WebSocket(url);
 
     ws.onopen = () => {
