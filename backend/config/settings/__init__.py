@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'anomaly',
     'simulator',
     'core',
+    'django_celery_beat',
 ]
 
 MIDDLEWARE = [
