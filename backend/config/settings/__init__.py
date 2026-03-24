@@ -12,24 +12,20 @@ class JsonFormatter(logging.Formatter):
             "logger": record.name,
             "message": record.getMessage(),
         }
-        # Standard Celery fields if available
         if hasattr(record, "task_id"):
             log_record["task_id"] = record.task_id
         if hasattr(record, "task_name"):
             log_record["task_name"] = record.task_name
-            
-        # Add extra fields if provided via 'extra={...}'
         for key, value in record.__dict__.items():
             if key not in ["args", "asctime", "created", "exc_info", "exc_text", "filename", "funcName", "levelname", "levelno", "lineno", "module", "msecs", "msg", "name", "pathname", "process", "processName", "relativeCreated", "stack_info", "thread", "threadName"]:
                 log_record[key] = value
-                
         return json.dumps(log_record)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-trackhive-production-key-2024')
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '.onrender.com,localhost,127.0.0.1').split(',')
 
-SECRET_KEY = 'django-insecure-temp-key'
-DEBUG = True
-ALLOWED_HOSTS = ['*']
 CITY_CONFIG = {
     'name': 'Bengaluru',
     'lat': 12.97,
@@ -44,7 +40,6 @@ CITY_CONFIG = {
     }
 }
 
-
 INSTALLED_APPS = [
     'daphne',
     'django.contrib.admin',
@@ -53,12 +48,10 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-
     'channels',
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
-
     'users',
     'agents',
     'orders',
@@ -71,17 +64,16 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
-    # 'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
-
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -105,24 +97,21 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [("redis", 6379)],
+            "hosts": [os.environ.get('REDIS_URL', 'redis://redis:6379/1')],
         },
     },
 }
 
+import dj_database_url
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'trackhive',
-        'USER': 'postgres',
-        'PASSWORD': 'postgres',
-        'HOST': 'db',
-        'PORT': '5432',
-    }
+    'default': dj_database_url.config(
+        default='postgres://postgres:postgres@db:5432/trackhive',
+        conn_max_age=600,
+        ssl_require=os.environ.get('DB_SSL_REQUIRE', 'False').lower() == 'true'
+    )
 }
 
 AUTH_USER_MODEL = 'users.User'
-
 AUTH_PASSWORD_VALIDATORS = [
     { 'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator' },
     { 'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator' },
@@ -136,6 +125,7 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
@@ -145,16 +135,6 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
-    'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
-        'rest_framework.throttling.ScopedRateThrottle',
-    ],
-    'DEFAULT_THROTTLE_RATES': {
-        'anon': '10000/minute',
-        'user': '10000/minute',
-        'simulator': '100000/minute',
-    }
 }
 
 SIMPLE_JWT = {
@@ -163,122 +143,23 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-CELERY_BROKER_URL = 'redis://redis:6379/0'
-CELERY_RESULT_BACKEND = 'redis://redis:6379/0'
-
-REDIS_URL = 'redis://redis:6379/1'
-
-if DEBUG:
-    CACHES = {
-        'default': {
-            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        }
-    }
-else:
-    CACHES = {
-        'default': {
-            'BACKEND': 'django_redis.cache.RedisCache',
-            'LOCATION': REDIS_URL,
-            'OPTIONS': {
-                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-            }
-        }
-    }
-
+CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
-
-from corsheaders.defaults import default_headers
-
-CORS_ALLOW_HEADERS = list(default_headers) + [
-    "authorization",
-    "content-type",
-]
-
-CORS_ALLOW_METHODS = [
-    "DELETE",
-    "GET",
-    "OPTIONS",
-    "PATCH",
-    "POST",
-    "PUT",
-]
-
-CORS_EXPOSE_HEADERS = ["Authorization"]
 
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
-        'json': {
-            '()': 'config.settings.JsonFormatter',
-        },
+        'json': { '()': 'config.settings.JsonFormatter' },
     },
     'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-            'formatter': 'json',
-        },
+        'console': { 'class': 'logging.StreamHandler', 'formatter': 'json' },
     },
     'loggers': {
-        'trackhive.anomaly': {
-            'handlers': ['console'],
-            'level': 'WARNING',
-            'propagate': False,
-        },
-        'trackhive.assignment': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'trackhive.simulator': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False,
-        },
-        'trackhive.tracking': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'propagate': False,
-        },
-        'trackhive.celery': {
-            'handlers': ['console'],
-            'level': 'INFO',
-            'propagate': False,
-        },
+        'trackhive.tracking': { 'handlers': ['console'], 'level': 'DEBUG', 'propagate': False },
+        'trackhive.simulator': { 'handlers': ['console'], 'level': 'INFO', 'propagate': False },
     },
 }
-
-# === PRODUCTION OVERRIDES (Render.com) ===
-import dj_database_url
-
-# 1. Database (RDS/Render Postgres)
-if os.environ.get('DATABASE_URL'):
-    # Only require SSL if DB_SSL_REQUIRE is explicitly 'True' (useful for Render production)
-    ssl_require = os.environ.get('DB_SSL_REQUIRE', 'False').lower() == 'true'
-    DATABASES['default'] = dj_database_url.parse(
-        os.environ.get('DATABASE_URL'),
-        conn_max_age=600,
-        ssl_require=ssl_require
-    )
-
-# 2. Redis & Channels
-REDIS_URL = os.environ.get('REDIS_URL', REDIS_URL)
-if os.environ.get('REDIS_URL'):
-    CHANNEL_LAYERS["default"]["CONFIG"]["hosts"] = [REDIS_URL]
-    CELERY_BROKER_URL = REDIS_URL
-    CELERY_RESULT_BACKEND = REDIS_URL
-
-# 3. Security
-if not DEBUG:
-    SECRET_KEY = os.environ.get('SECRET_KEY', SECRET_KEY)
-    ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '.onrender.com').split(',')
-    CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', 'http://localhost:5173').split(',')
-
-# 4. Static Files (WhiteNoise)
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
-if 'whitenoise.middleware.WhiteNoiseMiddleware' not in MIDDLEWARE:
-    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
-
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
