@@ -20,8 +20,9 @@ def calculate_and_push_eta(order_id, agent_lat, agent_lng, avg_speed):
         order.save()
 
         # ETA_RECALCULATED Logging
+        agent_user_id = getattr(order.agent.user, 'id', None) if order.agent else None
         log.info("eta_recalculated", 
-                 agent_id=str(order.agent.user.id) if order.agent else None,
+                 agent_id=str(agent_user_id) if agent_user_id else None,
                  eta_minutes=order.eta_minutes,
                  confidence_range=round(eta * 0.15, 2), # Simulated 15% dev
                  remaining_km=round(dist, 2))

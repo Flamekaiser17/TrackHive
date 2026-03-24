@@ -7,7 +7,7 @@ import { CITY_CENTER } from '../config';
 /**
  * Titan Map — High-fidelity markers with CSS glow rings
  */
-const createAgentIcon = (status, hasAnomaly) => {
+const createAgentIcon = (status, hasAnomaly, isFocused) => {
   let color = '#8B8BA7'; 
   if (hasAnomaly) color = '#FF4757';
   else if (status === 'available') color = '#00D4AA';
@@ -18,7 +18,7 @@ const createAgentIcon = (status, hasAnomaly) => {
     className: 'agent-marker-titan',
     html: `
       <div style="position: relative; width: 14px; height: 14px; display: flex; alignItems: center; justifyContent: center;">
-        <div class="marker-glow" style="--marker-color: ${color}60; background: ${color}20; border: 1.5px solid ${color}40;"></div>
+        <div class="marker-glow ${isFocused ? 'agent-pulse' : ''}" style="--marker-color: ${color}60; background: ${color}20; border: 1.5px solid ${color}40;"></div>
         <div style="
           width: 12px; height: 12px; 
           background: ${color}; 
@@ -75,7 +75,7 @@ const Map = ({ agents = [], orders = [], unresolvedAnomalies = [], onAgentClick,
         style={{ width: '100%', height: '100%', background: '#0A0A0F' }}
         zoomControl={false}
       >
-        <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+        <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png" />
         <MapResizer />
         <CenterChanger center={center} />
 
@@ -85,7 +85,7 @@ const Map = ({ agents = [], orders = [], unresolvedAnomalies = [], onAgentClick,
             <Marker 
               key={`agent-${agent.id}`} 
               position={[agent.lat, agent.lng]} 
-              icon={createAgentIcon(agent.status, hasAnomaly)}
+              icon={createAgentIcon(agent.status, hasAnomaly, String(agent.id) === String(focusedAgentId))}
               eventHandlers={{ click: () => onAgentClick && onAgentClick(agent) }}
             />
           );

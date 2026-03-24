@@ -81,102 +81,68 @@ const KPICard = ({
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      whileHover={{ y: -4, transition: { duration: 0.2 } }}
+      whileHover={{ borderColor: acc.base }}
       className="stat-card-base fade-up"
       style={{
         padding: '24px',
         cursor: 'default',
-        background: 'var(--bg-card)',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+        background: 'rgba(255, 255, 255, 0.01)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-lg)',
+        position: 'relative',
+        overflow: 'hidden',
+        transition: 'var(--transition-smooth)'
       }}
     >
-      {/* ── Hover Gradient Border ── */}
-      <motion.div
-        className="hover-border"
-        initial={{ opacity: 0 }}
-        whileHover={{ opacity: 1 }}
-        style={{
-          position: 'absolute', inset: 0, padding: 1,
-          background: acc.grad,
-          borderRadius: 'inherit',
-          WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
-          WebkitMaskComposite: 'xor',
-          maskComposite: 'exclude',
-          pointerEvents: 'none',
-          zIndex: 1,
-        }}
-      />
-
       {/* ── Content ── */}
       <div style={{ position: 'relative', zIndex: 2 }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24 }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
             {title}
           </span>
           {Icon && (
-            <motion.div 
-              whileHover={{ scale: 1.1 }}
-              style={{
-                width: 38, height: 38,
-                borderRadius: 'var(--radius-md)',
-                background: acc.muted,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                position: 'relative', overflow: 'hidden'
-              }}
-            >
-              {/* Shimmer effect inside icon bg */}
-              <motion.div
-                animate={{ x: ['-100%', '100%'] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                style={{
-                  position: 'absolute', inset: 0,
-                  background: `linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent)`,
-                }}
-              />
-              <Icon size={18} color={acc.base} strokeWidth={2.5} />
-            </motion.div>
+            <div style={{
+              width: 32, height: 32,
+              borderRadius: 'var(--radius-sm)',
+              background: 'var(--bg-primary)',
+              border: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}>
+              <Icon size={14} color={acc.base} strokeWidth={2.5} />
+            </div>
           )}
         </div>
 
-        {/* Value with Radial Glow */}
-        <div style={{ position: 'relative', display: 'inline-block', marginBottom: 14 }}>
-          <div style={{
-            position: 'absolute', top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: 100, height: 60,
-            background: acc.glow,
-            filter: 'blur(30px)',
-            borderRadius: '50%',
-            zIndex: -1,
-          }} />
-          <div style={{ fontSize: 42, fontWeight: 900, lineHeight: 1, color: 'var(--text-primary)', letterSpacing: '-1.5px' }}>
+        {/* Value */}
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 32, fontWeight: 900, lineHeight: 1, color: '#fff', letterSpacing: '-1px' }}>
             <AnimatedNumber value={value} />
           </div>
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {subtitle && (
-            <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 500 }}>{subtitle}</span>
-          )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {trendValue && (
             <div style={{ 
-              display: 'flex', alignItems: 'center', gap: 6,
-              background: `${trendColor}10`, padding: '4px 8px', borderRadius: 99
+              display: 'flex', alignItems: 'center', gap: 4,
+              color: trendColor
             }}>
               <TrendIcon size={12} color={trendColor} strokeWidth={3} />
-              <span style={{ fontSize: 11, fontWeight: 800, color: trendColor }}>{trendValue}</span>
+              <span style={{ fontSize: 11, fontWeight: 800 }}>{trendValue}</span>
             </div>
+          )}
+          {subtitle && (
+            <span style={{ fontSize: 11, color: 'var(--text-faint)', fontWeight: 700 }}>{subtitle}</span>
           )}
         </div>
       </div>
 
-      {/* ── Bottom Trend Bar ── */}
+      {/* ── Minimal Accent Bar ── */}
       <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        height: 3,
-        background: acc.grad,
-        opacity: 0.8,
+        position: 'absolute', bottom: 0, left: '24px', right: '24px',
+        height: 1,
+        background: acc.base,
+        opacity: 0.3,
       }} />
 
       <style>{`

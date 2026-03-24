@@ -22,7 +22,7 @@ def push_anomaly_to_ws(agent, anomaly_type, order=None):
             "type": "anomaly_alert",
             "data": {
                 "agent_id": agent.id,
-                "agent_name": agent.user.username,
+                "agent_name": getattr(agent.user, 'username', f"Agent_{agent.id}"),
                 "anomaly_type": anomaly_type,
                 "order_id": order.id if order else None
             }
@@ -122,11 +122,11 @@ def check_unreachable_agents():
     three_mins_ago = timezone.now() - datetime.timedelta(minutes=3)
     
     for order in active_orders:
-        extra = {
-            "order_id": str(order.id), 
-            "agent_id": str(order.agent.id)
-        }
         if order.agent:
+            extra = {
+                "order_id": str(order.id), 
+                "agent_id": str(order.agent.id)
+            }
             last_update = LocationUpdate.objects.filter(
                 agent=order.agent
             ).order_by('-timestamp').first()

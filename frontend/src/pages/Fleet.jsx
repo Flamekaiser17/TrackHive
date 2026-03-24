@@ -103,10 +103,14 @@ const AgentCard = ({ agent, onClick }) => {
 /*  FLEET PAGE (TITAN UPGRADE)                                    */
 /* ══════════════════════════════════════════════════════════════ */
 const Fleet = () => {
-  const { agents, loading } = useAgents();
+  const { agents, loading } = useContext(FleetContext);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
-  const [selectedAgent, setSelectedAgent] = useState(null);
+  const [selectedAgentId, setSelectedAgentId] = useState(null);
+
+  const selectedAgent = useMemo(() => 
+    (agents || []).find(a => a.id === selectedAgentId),
+  [agents, selectedAgentId]);
 
   const filtered = useMemo(() => {
     let list = agents || [];
@@ -174,7 +178,7 @@ const Fleet = () => {
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
-          {filtered.map(agent => <AgentCard key={agent.id} agent={agent} onClick={setSelectedAgent} />)}
+          {filtered.map(agent => <AgentCard key={agent.id} agent={agent} onClick={(a) => setSelectedAgentId(a.id)} />)}
         </div>
       )}
 
@@ -182,14 +186,14 @@ const Fleet = () => {
       <AnimatePresence>
         {selectedAgent && (
           <div style={{ position: 'fixed', inset: 0, zIndex: 2000 }}>
-             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedAgent(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedAgentId(null)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }} />
              <motion.div
                initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', damping: 30, stiffness: 300 }}
                style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 440, background: '#12121A', borderLeft: '1px solid var(--border)', padding: '32px' }}
              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32 }}>
                    <h2 style={{ fontSize: 24, fontWeight: 900 }}>Unit detail</h2>
-                   <button onClick={() => setSelectedAgent(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)' }}><X size={24} /></button>
+                   <button onClick={() => setSelectedAgentId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)' }}><X size={24} /></button>
                 </div>
                 {/* Simplified Titan Detail View */}
                 <div style={{ width: 80, height: 80, borderRadius: 24, background: 'var(--gradient-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 32, fontWeight: 900, color: '#fff', marginBottom: 20 }}>{(selectedAgent.username || 'A')[0].toUpperCase()}</div>
@@ -199,7 +203,7 @@ const Fleet = () => {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 32 }}>
                    <div style={{ padding: '20px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
                       <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: 8 }}>Speed rating</p>
-                      <p style={{ fontSize: 20, fontWeight: 900, color: '#fff' }}>{selectedAgent.speed} km/h</p>
+                      <p style={{ fontSize: 20, fontWeight: 900, color: '#fff' }}>{Number(selectedAgent.speed || 0).toFixed(1)} km/h</p>
                    </div>
                    <div style={{ padding: '20px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)' }}>
                       <p style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-faint)', textTransform: 'uppercase', marginBottom: 8 }}>Orders handled</p>

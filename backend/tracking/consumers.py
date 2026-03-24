@@ -52,17 +52,23 @@ class TrackingConsumer(AsyncWebsocketConsumer):
                 }
             )
             
+            agent_profile = update.agent
+            agent_user = getattr(agent_profile, 'user', None)
+            
             # Broadcast update
             payload = {
                 "type": "tracking_message",
                 "data": {
                     "agent_id": agent_profile.id,
+                    "agent_name": agent_user.username if agent_user else f"Agent_{agent_profile.id}",
                     "lat": lat,
                     "lng": lng,
                     "speed": speed,
                     "battery": agent_profile.battery_level,
                     "km_today": agent_profile.total_km_today,
                     "orders_today": agent_profile.orders_last_4hrs,
+                    "fatigue_score": agent_profile.fatigue_score,
+                    "status": agent_profile.status,
                     "order_id": order_id
                 }
             }
@@ -136,10 +142,27 @@ class AdminConsumer(AsyncWebsocketConsumer):
         pass  # Admin only receives, doesn't send
 
     async def tracking_message(self, event):
-        await self.send(text_data=json.dumps({
+        # ── Robust extraction ─────────────────────────────────────────
+        # Some sources send nested 'data', others send flat. 
+        # We merge for maximum telemetry reliability.
+        raw_data = event.get("data", {})
+        
+        # Priority: nested data > top-level event keys
+        payload = {
             "type": "agent_location_update",
-            **event["data"]
-        }))
+            "agent_id": raw_data.get("agent_id") or event.get("agent_id"),
+            "agent_name": raw_data.get("agent_name") or event.get("agent_name", ""),
+            "lat": raw_data.get("lat") or event.get("lat", 0),
+            "lng": raw_data.get("lng") or event.get("lng", 0),
+            "speed": raw_data.get("speed") or event.get("speed", 0),
+            "battery": raw_data.get("battery") or event.get("battery", 0),
+            "km_today": raw_data.get("km_today") or event.get("km_today", 0),
+            "orders_today": raw_data.get("orders_today") or event.get("orders_today", 0),
+            "fatigue_score": raw_data.get("fatigue_score") or event.get("fatigue_score", 0),
+            "status": raw_data.get("status") or event.get("status", "available"),
+        }
+        
+        await self.send(text_data=json.dumps(payload))
 
     async def anomaly_alert(self, event):
         await self.send(text_data=json.dumps({

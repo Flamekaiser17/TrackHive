@@ -70,36 +70,32 @@ export const FleetProvider = ({ children }) => {
 
     // 1. Handle Agent Updates
     if (lastMessage.type === 'agent_location_update' || lastMessage.type === 'tracking_message' || lastMessage.type === 'agent_status_change') {
-       if (isSimulating && (lastMessage.type === 'agent_location_update' || lastMessage.type === 'tracking_message')) {
+       // DEBUG: Log telemetry arrival
+       if (lastMessage.speed !== undefined) {
+         console.log(`WS_UPDATE: Agent_${lastMessage.agent_id} @ ${lastMessage.speed} km/h`);
+       }
+
+       if (isSimulating) {
           setSimStats(prev => ({ ...prev, events: prev.events + 1 }));
        }
-      setAgents(prev => {
-        // Robust ID comparison (handle string vs int)
-        const idx = prev.findIndex(a => String(a.id) === String(lastMessage.agent_id));
-        
-        if (idx === -1) {
-          // AUTO-DISCOVERY: If agent unknown, refresh the fleet list to catch up
-          console.log(`FLEET_SYNC: Discovered new agent ${lastMessage.agent_id}, syncing...`);
-          fetchData(); // Trigger full refresh
-          return prev;
-        }
 
-        const updated = [...prev];
-        updated[idx] = {
-          ...updated[idx],
-          ...((lastMessage.type === 'agent_location_update' || lastMessage.type === 'tracking_message') ? {
-            lat: parseFloat(lastMessage.lat),
-            lng: parseFloat(lastMessage.lng),
-            speed: parseFloat(lastMessage.speed || updated[idx].speed),
-            battery_level: parseFloat(lastMessage.battery || updated[idx].battery_level),
-            km_today: parseFloat(lastMessage.km_today || updated[idx].km_today || 0),
-            orders_today: parseInt(lastMessage.orders_today || updated[idx].orders_today || 0, 10),
-          } : {
-            status: lastMessage.status
-          })
+       setAgents(prev => prev.map(a => {
+        const isMatch = String(a.id) === String(lastMessage.agent_id);
+        if (!isMatch) return a;
+        
+        // Merge telemetry metrics accurately
+        return {
+          ...a,
+          speed: lastMessage.speed !== undefined ? lastMessage.speed : a.speed,
+          lat: lastMessage.lat || a.lat,
+          lng: lastMessage.lng || a.lng,
+          fatigue_score: lastMessage.fatigue_score !== undefined ? lastMessage.fatigue_score : (a.fatigue_score || 0),
+          status: lastMessage.status || a.status,
+          km_today: lastMessage.km_today !== undefined ? lastMessage.km_today : a.km_today,
+          battery_level: lastMessage.battery !== undefined ? lastMessage.battery : a.battery_level,
+          orders_today: lastMessage.orders_today !== undefined ? lastMessage.orders_today : a.orders_today
         };
-        return updated;
-      });
+      }));
     }
 
     // 2. Handle Anomalies

@@ -16,8 +16,8 @@ export const loginUser = async (email, password) => {
 };
 
 // --- AGENTS / FLEET ---
-export const getAgents = async () => {
-  const response = await client.get('/api/agents/');
+export const getAgents = async (params = {}) => {
+  const response = await client.get('/api/agents/', { params });
   const data = response.data;
   return Array.isArray(data) ? data : (data?.results || []);
 };

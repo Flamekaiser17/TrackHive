@@ -1,10 +1,11 @@
-import { useMemo, useState, useContext } from 'react';
+import { useMemo, useState, useContext, useEffect, useRef, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Users, Package, AlertTriangle, Activity,
   CheckCircle2, ChevronRight, MapPin, Zap,
   TrendingUp, TrendingDown,
 } from 'lucide-react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import useAgents from '../hooks/useAgents';
 import useAnomalies from '../hooks/useAnomalies';
 import { FleetContext } from '../context/FleetContext';
@@ -12,6 +13,44 @@ import { resolveAnomaly } from '../api/endpoints';
 import KPICard from '../components/KPICard';
 import StatusBadge from '../components/StatusBadge';
 import FatigueBar from '../components/FatigueBar';
+
+/* ── SpeedGraph Component ───────────────────────────────────── */
+const SpeedGraph = ({ speed }) => {
+  const [history, setHistory] = useState([]);
+
+  useEffect(() => {
+    setHistory(prev => {
+      const next = [...prev, {
+        t: new Date().toLocaleTimeString('en-IN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        speed: Math.floor(speed || 0)
+      }];
+      return next.slice(-20); // last 20 points
+    });
+  }, [speed]);
+
+  return (
+    <div style={{
+      background: 'transparent',
+      border: '1px solid rgba(108,99,255,0.15)',
+      borderRadius: 12,
+      padding: '16px',
+      marginBottom: 24,
+      position: 'relative'
+    }}>
+      <p style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>
+        Fleet Speed · Live
+      </p>
+      <ResponsiveContainer width="100%" height={120}>
+        <LineChart data={history}>
+          <XAxis dataKey="t" tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.2)' }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
+          <YAxis tick={{ fontSize: 9, fill: 'rgba(255,255,255,0.2)' }} axisLine={false} tickLine={false} width={28} />
+          <Tooltip contentStyle={{ background: '#13131a', border: '1px solid rgba(108,99,255,0.2)', borderRadius: 8, fontSize: 11, color: '#fff' }} labelStyle={{ color: 'rgba(255,255,255,0.4)' }} />
+          <Line type="monotone" dataKey="speed" stroke="#6C63FF" strokeWidth={2} dot={false} isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
 
 /* ── Helpers ─────────────────────────────────────────────────── */
 const getInitials = (name = '') =>
@@ -60,11 +99,11 @@ const CircularProgress = ({ score }) => {
   const color = score > 80 ? '#2ED573' : score > 50 ? '#FFA502' : '#FF4757';
 
   return (
-    <div style={{ position: 'relative', width: 90, height: 90, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <svg width="90" height="90" style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx="45" cy="45" r={radius} stroke="var(--border)" strokeWidth="8" fill="transparent" />
+    <div style={{ position: 'relative', width: 80, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <svg width="80" height="80" style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx="40" cy="40" r={radius} stroke="var(--border)" strokeWidth="4.5" fill="transparent" strokeOpacity={0.4} />
         <motion.circle
-          cx="45" cy="45" r={radius} stroke={color} strokeWidth="8" fill="transparent"
+          cx="40" cy="40" r={radius} stroke={color} strokeWidth="4.5" fill="transparent"
           strokeDasharray={circumference}
           initial={{ strokeDashoffset: circumference }}
           animate={{ strokeDashoffset: offset }}
@@ -117,68 +156,90 @@ const AgentFatigueCard = ({ agent, onViewMap }) => {
 
   return (
     <motion.div
-      whileHover={{ y: -4, scale: 1.01 }}
+      whileHover={{
+        y: -6,
+        borderColor: 'rgba(108,99,255,0.5)',
+        boxShadow: '0 0 24px rgba(108,99,255,0.08)'
+      }}
+      transition={{ type: "spring", stiffness: 300, damping: 20 }}
       style={{
-        background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)',
-        padding: '20px', display: 'flex', flexDirection: 'column', gap: 14,
-        transition: 'var(--transition-smooth)', boxShadow: '0 8px 30px rgba(0,0,0,0.2)'
+        background: 'transparent', border: '1px solid rgba(108,99,255,0.18)', borderRadius: 'var(--radius-lg)',
+        padding: '20px', display: 'flex', flexDirection: 'column', gap: 16,
+        transition: 'var(--transition-smooth)',
+        animation: agent.fatigue_score >= 8 ? 'critical-pulse 2s infinite' : 'none'
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <div style={{
-          width: 44, height: 44, borderRadius: 14, flexShrink: 0,
-          background: `${color}15`, border: `1.5px solid ${color}40`,
+          width: 38, height: 38, borderRadius: 'var(--radius-sm)', flexShrink: 0,
+          background: 'var(--bg-primary)', border: `1px solid var(--border)`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 14, fontWeight: 900, color, boxShadow: `0 0 12px ${color}15`
+          fontSize: 13, fontWeight: 900, color: 'var(--primary)'
         }}>
           {initials}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <p style={{ fontSize: 14, fontWeight: 800, color: '#fff', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <p style={{ fontSize: 13, fontWeight: 800, color: '#fff', marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {agent.username}
           </p>
-          <StatusBadge value={agent.status} size="xs" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+             <span style={{ width: 6, height: 6, borderRadius: '50%', background: agent.status === 'offline' ? 'var(--text-faint)' : agent.status === 'busy' ? 'var(--warning)' : 'var(--success)' }} />
+             <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{agent.status}</span>
+          </div>
         </div>
       </div>
 
-      <FatigueBar score={agent.fatigue_score || 0} showLabel showScore height={6} />
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <p style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)' }}>PREPAREDNESS</p>
+        <motion.span 
+          key={agent.fatigue_score}
+          initial={{ opacity: 0, y: -4 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{ fontSize: 11, fontWeight: 900, color: color }}
+        >
+          {agent.fatigue_score || 0}/10
+        </motion.span>
+      </div>
+      <FatigueBar score={agent.fatigue_score || 0} height={6} />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1px 1.2fr 1px 1fr', gap: 8, padding: '12px 0', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ 
+        display: 'grid', gridTemplateColumns: '1fr 1px 1fr', 
+        gap: 8, padding: '12px 0', 
+        borderTop: '1px solid rgba(255,255,255,0.03)', 
+        borderBottom: '1px solid rgba(255,255,255,0.03)' 
+      }}>
         <div style={{ textAlign: 'center' }}>
-          <p style={{ fontSize: 16, fontWeight: 900, color: '#fff' }}>{agent.orders_today ?? '0'}</p>
-          <p style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>Orders</p>
+          <motion.p 
+            key={agent.speed}
+            initial={{ opacity: 0, y: -8, scale: 0.85 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ type: "spring", stiffness: 400, damping: 20 }}
+            style={{ fontSize: 15, fontWeight: 900, color: 'var(--primary)' }}
+          >
+            {Math.floor(agent.speed || 0)}
+          </motion.p>
+          <p style={{ fontSize: 9, color: 'var(--text-faint)', fontWeight: 700, textTransform: 'uppercase' }}>km/h</p>
         </div>
-        <div style={{ width: 1, background: 'var(--border)' }} />
-        <div style={{ textAlign: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-            <Zap size={11} color="var(--primary)" fill="var(--primary)" />
-            <motion.p 
-              key={agent.speed}
-              initial={{ scale: 1.2, color: '#fff' }}
-              animate={{ scale: 1, color: 'var(--primary)' }}
-              style={{ fontSize: 16, fontWeight: 900 }}
-            >
-              {Math.floor(agent.speed || 0)}
-            </motion.p>
-          </div>
-          <p style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>km/h</p>
-        </div>
-        <div style={{ width: 1, background: 'var(--border)' }} />
+        <div style={{ width: 1, background: 'rgba(255,255,255,0.03)' }} />
         <div style={{ textAlign: 'center' }}>
           <motion.p 
             key={agent.km_today}
-            initial={{ opacity: 0.5 }}
-            animate={{ opacity: 1 }}
-            style={{ fontSize: 16, fontWeight: 900, color: '#fff' }}
+            initial={{ opacity: 0, y: -8, scale: 0.85 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ type: "spring", stiffness: 400, damping: 20 }}
+            style={{ fontSize: 15, fontWeight: 900, color: '#fff' }}
           >
             {typeof agent.km_today === 'number' ? agent.km_today.toFixed(1) : '0.0'}
           </motion.p>
-          <p style={{ fontSize: 9, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>km</p>
+          <p style={{ fontSize: 9, color: 'var(--text-faint)', fontWeight: 700, textTransform: 'uppercase' }}>km</p>
         </div>
       </div>
 
       <button
-        onClick={() => onViewMap(agent.id)}
+        onClick={() => {
+          localStorage.setItem('focusAgent', JSON.stringify({ id: agent.id, lat: agent.lat, lng: agent.lng }));
+          onViewMap(agent.id);
+        }}
         style={{
           width: '100%', padding: '10px 0',
           background: 'var(--surface-glass)', border: '1px solid var(--border)',
@@ -253,19 +314,65 @@ const AnomalyRow = ({ row, onResolve, resolving }) => {
 /* ══════════════════════════════════════════════════════════════ */
 const Dashboard = ({ onNavigate }) => {
   const { 
-    agents, loading: agentsLoading, 
-    anomalies, loading: anomaliesLoading, setAnomalies,
-    orders 
+    agents,
+    anomalies,
+    setAnomalies,
+    orders,
+    loading
   } = useContext(FleetContext);
   const [resolving, setResolving] = useState(null);
+  const audioCtx = useRef(null);
+
+  /* ── Sound Helper ── */
+  const playAlert = useCallback((type = 'anomaly') => {
+    try {
+      if (!audioCtx.current) {
+        audioCtx.current = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      const ctx = audioCtx.current;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      if (type === 'critical') {
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.4);
+      } else {
+        osc.frequency.setValueAtTime(523, ctx.currentTime);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.25);
+      }
+    } catch(e) {}
+  }, []);
+
+  useEffect(() => {
+    const unresolved = anomalies.filter(a => !a.resolved);
+    if (unresolved.length > 0) {
+      const latest = unresolved[0];
+      if (latest.severity === 'high') playAlert('critical');
+      else playAlert('anomaly');
+    }
+  }, [anomalies.length, playAlert]);
 
   /* ── Derived Stats ──────────────────────────────────── */
+  const permanentAgents = useMemo(() => 
+    (agents || []).filter(a => a.is_permanent), 
+  [agents]);
+
   const counts = useMemo(() => {
     const list = agents || [];
     return {
-      active: list.filter(a => a.status !== 'offline').length,
+      active: list.filter(a => a.is_permanent).length,
+      swarm: list.filter(a => !a.is_permanent).length,
       unresolved: (anomalies || []).filter(a => !a.resolved).length,
-      orders: (orders || []).filter(o => o.status === 'in_progress').length,
+      orders: (orders || []).length,
       avgFatigue: list.length ? (list.reduce((s, a) => s + (a.fatigue_score || 0), 0) / list.length).toFixed(1) : 0
     };
   }, [agents, anomalies, orders]);
@@ -276,7 +383,12 @@ const Dashboard = ({ onNavigate }) => {
     return Math.floor(Math.max(0, (10 - f) * 10)); // 10 fatigue = 0 health, 0 fatigue = 100 health
   }, [counts.avgFatigue]);
 
-  const loading = agentsLoading || anomaliesLoading;
+  const avgSpeed = useMemo(() =>
+    permanentAgents.length
+      ? Math.floor(permanentAgents.reduce((s, a) => s + (a.speed || 0), 0) / permanentAgents.length)
+      : 0,
+  [permanentAgents]);
+
 
   return (
     <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 32, height: '100%', overflowY: 'auto' }}>
@@ -302,10 +414,10 @@ const Dashboard = ({ onNavigate }) => {
         </div>
       </Section>
 
-      {/* ── Fatigue Overvew with Heatmap Row ───────────────── */}
+      {/* ── Fatigue HUD (Refined) ───────────────────────────── */}
       <Section delay={0.1}>
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', padding: '28px' }}>
-          <SectionHeader title="Fleet Fatigue HUD" badge={`${agents?.length || 0} Swarm Members`} action={
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', padding: '24px' }}>
+          <SectionHeader title="Fleet Fatigue HUD" badge={`${counts.swarm} Swarm Members Active`} action={
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               {[
                 { label: 'Fresh', color: '#2ED573' },
@@ -320,20 +432,16 @@ const Dashboard = ({ onNavigate }) => {
             </div>
           } />
 
-          {/* Mini Heatmap Row */}
-          <div style={{ 
-            height: 4, width: '100%', background: 'var(--border)', borderRadius: 10, 
-            marginBottom: 28, overflow: 'hidden', display: 'flex' 
-          }}>
-            <div style={{ flex: counts.active, background: '#2ED573', height: '100%' }} />
-            <div style={{ flex: counts.unresolved, background: '#FF4757', height: '100%' }} />
-            <div style={{ flex: 5, background: '#FFA502', height: '100%' }} />
-          </div>
+          <SpeedGraph speed={avgSpeed} />
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
-            {(agents || []).sort((a,b) => b.fatigue_score - a.fatigue_score).slice(0, 10).map(a => (
-              <AgentFatigueCard key={a.id} agent={a} onViewMap={() => onNavigate('live-map')} />
-            ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
+            {loading ? (
+              [1,2,3,4,5].map(i => <div key={i} className="skeleton" style={{ height: 180 }} />)
+            ) : (
+              permanentAgents.map(a => (
+                <AgentFatigueCard key={a.id} agent={a} onViewMap={() => onNavigate('live-map')} />
+              ))
+            )}
           </div>
         </div>
       </Section>

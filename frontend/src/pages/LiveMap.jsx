@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useContext } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Filter, Users, Circle, Zap, AlertTriangle,
@@ -8,8 +8,7 @@ import {
 import Map from '../components/Map';
 import StatusBadge from '../components/StatusBadge';
 import FatigueBar from '../components/FatigueBar';
-import useAgents from '../hooks/useAgents';
-import useAnomalies from '../hooks/useAnomalies';
+import { FleetContext } from '../context/FleetContext';
 
 /* ── Filter config ──────────────────────────────────────────── */
 const FILTERS = [
@@ -92,11 +91,17 @@ const AgentPanel = ({ agent, onClose }) => {
 /*  LIVE MAP PAGE (TITAN UPGRADE)                                 */
 /* ══════════════════════════════════════════════════════════════ */
 const LiveMap = ({ focusedAgentId }) => {
-  const { agents, connected } = useAgents();
-  const { anomalies } = useAnomalies();
+  const { agents, anomalies, orders, connected } = useContext(FleetContext);
   const [filter, setFilter] = useState('all');
   const [selectedAgent, setSelectedAgent] = useState(null);
   const [filterOpen, setFilterOpen] = useState(false);
+
+  /* ── Effect to clear focus memory ── */
+  useEffect(() => {
+    return () => {
+      localStorage.removeItem('focusAgent');
+    };
+  }, []);
 
   /* ── Calculations ── */
   const unresolvedAnomalies = useMemo(() => (anomalies || []).filter(a => !a.resolved), [anomalies]);
@@ -115,7 +120,7 @@ const LiveMap = ({ focusedAgentId }) => {
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background: '#050508', overflow: 'hidden' }}>
-      <Map agents={agents} unresolvedAnomalies={unresolvedAnomalies} focusedAgentId={focusedAgentId} onAgentClick={setSelectedAgent} />
+      <Map agents={agents} orders={orders} unresolvedAnomalies={unresolvedAnomalies} focusedAgentId={focusedAgentId} onAgentClick={setSelectedAgent} />
 
       {/* ── Frosted Glass Filters ── */}
       <div style={{ position: 'absolute', top: 24, left: 24, zIndex: 1000 }}>

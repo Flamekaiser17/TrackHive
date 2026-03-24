@@ -13,9 +13,15 @@ class AgentPagination(PageNumberPagination):
 class DeliveryAgentViewSet(viewsets.ModelViewSet):
     throttle_scope = 'user'
     pagination_class = AgentPagination
-    queryset = DeliveryAgent.objects.select_related('user').all()
     serializer_class = DeliveryAgentSerializer
     permission_classes = [IsAdminUserRole]
+
+    def get_queryset(self):
+        queryset = DeliveryAgent.objects.select_related('user').all()
+        permanent = self.request.query_params.get('permanent')
+        if permanent == 'true':
+            queryset = queryset.filter(is_permanent=True)
+        return queryset
 
     @action(detail=True, methods=['patch'], permission_classes=[IsAdminUserRole])
     def reset_fatigue(self, request, pk=None):

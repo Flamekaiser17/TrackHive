@@ -28,22 +28,22 @@
   --glow-teal:    0 0 40px rgba(0, 212, 170, 0.15);
   --glow-danger:  0 0 40px rgba(255, 71, 87, 0.15);
 
-  /* Text Colors */
+  /* Text Colors (Titan Refinement) */
   --text-primary:   #FFFFFF;
-  --text-secondary: #C0C0D8;
-  --text-muted:     #8B8BA7;
-  --text-faint:     #55556A;
+  --text-secondary: #A1A1AA;
+  --text-muted:     #71717A;
+  --text-faint:     #3F3F46;
 
   /* Spacing / Radii (Titan Standard) */
   --radius-xs: 4px;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
 
   /* Transitions */
-  --transition-fast:   all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-fast:   all 0.1s ease;
+  --transition-smooth: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ─── Global Reset ─────────────────────────────────────────── */
@@ -106,6 +106,18 @@ body {
   0%   { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 var(--ring-color, rgba(108,99,255,0.6)); }
   70%  { transform: scale(1);    opacity: 1;   box-shadow: 0 0 0 10px transparent; }
   100% { transform: scale(0.95); opacity: 0.8; box-shadow: 0 0 0 0 transparent; }
+}
+
+@keyframes critical-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255,71,87,0.3) }
+  70% { box-shadow: 0 0 0 8px rgba(255,71,87,0) }
+  100% { box-shadow: 0 0 0 0 rgba(255,71,87,0) }
+}
+
+@keyframes map-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(108,99,255,0.6); }
+  70% { box-shadow: 0 0 0 16px rgba(108,99,255,0); }
+  100% { box-shadow: 0 0 0 0 rgba(108,99,255,0); }
 }
 
 @keyframes blink-dot {
@@ -181,6 +193,17 @@ body {
   inset: -8px;
   border-radius: 50%;
   animation: marker-glow-pulse 2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background-color: #0A0A0F !important;
+}
+
+.agent-pulse {
+  animation: map-pulse 1.5s ease-out infinite !important;
+  border-radius: 50%;
 }
 
 /* ─── TerminalScanline ─────────────────────────────────────── */
