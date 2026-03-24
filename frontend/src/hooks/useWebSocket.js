@@ -59,7 +59,6 @@ const useWebSocket = () => {
 
     ws.onerror = (error) => {
       console.error('WS_SOCKET_ERROR: Connection failed on the simulation cluster.', error);
-      ws.close();
     };
 
     wsRef.current = ws;
