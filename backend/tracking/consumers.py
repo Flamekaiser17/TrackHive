@@ -142,7 +142,7 @@ class AdminConsumer(AsyncWebsocketConsumer):
         pass  # Admin only receives, doesn't send
 
     async def tracking_message(self, event):
-        # Restore robust extraction
+        # Synchronized telemetry mapper
         raw_data = event.get("data", {})
         payload = {
             "type": "agent_location_update",
@@ -152,10 +152,11 @@ class AdminConsumer(AsyncWebsocketConsumer):
             "lng": raw_data.get("lng") or event.get("lng", 0),
             "speed": raw_data.get("speed") or event.get("speed", 0),
             "battery": raw_data.get("battery") or event.get("battery", 0),
-            "km_today": raw_data.get("km_today") or event.get("km_today", 0),
+            "distance": raw_data.get("distance") or event.get("km_today") or 0,
             "orders_today": raw_data.get("orders_today") or event.get("orders_today", 0),
             "fatigue_score": raw_data.get("fatigue_score") or event.get("fatigue_score", 0),
             "status": raw_data.get("status") or event.get("status", "available"),
+            "timestamp": raw_data.get("timestamp") or event.get("timestamp")
         }
         await self.send(text_data=json.dumps(payload))
 
