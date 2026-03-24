@@ -26,6 +26,7 @@ const ICON_MAP = {
   agent_stuck:     { icon: MapPin,     label: 'Unit Stationary', color: '#FFA502', grad: 'linear-gradient(135deg, #FFA502 0%, #FF6400 100%)' },
   route_deviation: { icon: Navigation, label: 'Path Deviation',  color: '#6C63FF', grad: 'var(--gradient-primary)' },
   unreachable:     { icon: WifiOff,    label: 'Signal Loss',     color: '#8B8BA7', grad: 'linear-gradient(135deg, #8B8BA7 0%, #55556A 100%)' },
+  high_fatigue:    { icon: User,       label: 'Critical Fatigue', color: '#FF6400', grad: 'linear-gradient(135deg, #FF6400 0%, #FF4757 100%)' },
 };
 
 const getAnomalyMeta = (type) => {
@@ -39,6 +40,7 @@ const TABS = [
   { id: 'agent_stuck',     label: 'Stasis' },
   { id: 'route_deviation', label: 'Tactical' },
   { id: 'unreachable',     label: 'Comm-Loss' },
+  { id: 'high_fatigue',    label: 'Fatigue' },
 ];
 
 /* ══════════════════════════════════════════════════════════════ */

@@ -383,11 +383,13 @@ const Dashboard = ({ onNavigate }) => {
     return Math.floor(Math.max(0, (10 - f) * 10)); // 10 fatigue = 0 health, 0 fatigue = 100 health
   }, [counts.avgFatigue]);
 
-  const avgSpeed = useMemo(() =>
-    permanentAgents.length
-      ? Math.floor(permanentAgents.reduce((s, a) => s + (a.speed || 0), 0) / permanentAgents.length)
-      : 0,
-  [permanentAgents]);
+  const avgSpeed = useMemo(() => {
+    const list = agents || [];
+    const active = list.filter(a => (a.speed || 0) > 0);
+    return active.length
+      ? Math.floor(active.reduce((s, a) => s + (a.speed || 0), 0) / active.length)
+      : 0;
+  }, [agents]);
 
 
   return (
@@ -438,7 +440,8 @@ const Dashboard = ({ onNavigate }) => {
             {loading ? (
               [1,2,3,4,5].map(i => <div key={i} className="skeleton" style={{ height: 180 }} />)
             ) : (
-              permanentAgents.map(a => (
+              // Show all agents during simulation, only permanent ones otherwise
+              (permanentAgents.length > 0 ? permanentAgents : (agents || []).slice(0, 20)).map(a => (
                 <AgentFatigueCard key={a.id} agent={a} onViewMap={() => onNavigate('live-map')} />
               ))
             )}

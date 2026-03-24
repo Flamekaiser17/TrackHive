@@ -75,6 +75,24 @@ def detect_anomalies_task(agent_id, current_lat, current_lng,
         if stuck:
             anomaly_detected = 'agent_stuck'
 
+    # High fatigue check (fatigue_score >= 8 is critical)
+    if agent.fatigue_score >= 8.0:
+        # Dedup: only fire once — skip if unresolved high_fatigue already exists
+        already_flagged = AnomalyLog.objects.filter(
+            agent=agent,
+            anomaly_type='high_fatigue',
+            resolved=False
+        ).exists()
+        if not already_flagged:
+            logger.warning(
+                "anomaly_detected",
+                extra={**extra, "anomaly_type": 'high_fatigue', "fatigue": agent.fatigue_score}
+            )
+            fatigue_log = AnomalyLog.objects.create(
+                agent=agent, anomaly_type='high_fatigue'
+            )
+            push_anomaly_to_ws(agent, 'high_fatigue', anomaly_log=fatigue_log)
+
     if anomaly_detected:
         logger.warning(
             "anomaly_detected",

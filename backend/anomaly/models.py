@@ -6,6 +6,7 @@ class AnomalyLog(models.Model):
         ('agent_stuck', 'Agent Stuck'),
         ('route_deviation', 'Route Deviation'),
         ('unreachable', 'Unreachable'),
+        ('high_fatigue', 'High Fatigue'),
     )
     agent = models.ForeignKey(
         'agents.DeliveryAgent',

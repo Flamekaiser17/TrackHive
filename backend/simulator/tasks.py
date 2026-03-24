@@ -46,12 +46,18 @@ def simulate_agent_movement(self, agent_id):
     if random.random() < 0.05:
         agent.orders_last_4hrs += 1
 
+    # Accumulate active hours (each tick = 2 seconds = 2/3600 of an hour)
+    agent.hours_active = round(agent.hours_active + (2 / 3600), 6)
+
     agent.current_lat = new_lat
     agent.current_lng = new_lng
     speed = random.uniform(20, 60)
     if hasattr(agent, 'current_speed'):
         agent.current_speed = speed
-    agent.save()
+
+    # Recalculate fatigue score using model method (persists to DB)
+    agent.save()  # save position/km first so calculate_fatigue reads fresh values
+    agent.calculate_fatigue()  # updates fatigue_score and saves again
 
     LocationUpdate.objects.create(
         agent=agent, lat=new_lat, lng=new_lng, speed_kmph=speed
