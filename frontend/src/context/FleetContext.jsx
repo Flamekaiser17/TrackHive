@@ -88,14 +88,14 @@ export const FleetProvider = ({ children }) => {
         // Merge telemetry metrics accurately
         return {
           ...a,
-          speed: lastMessage.speed !== undefined ? lastMessage.speed : a.speed,
+          speed: lastMessage.speed !== undefined ? Number(lastMessage.speed) : (a.speed || 0),
           lat: lastMessage.lat || a.lat,
           lng: lastMessage.lng || a.lng,
-          fatigue_score: lastMessage.fatigue_score !== undefined ? lastMessage.fatigue_score : (a.fatigue_score || 0),
+          fatigue_score: lastMessage.fatigue_score !== undefined ? Number(lastMessage.fatigue_score) : (a.fatigue_score || 0),
           status: lastMessage.status || a.status,
-          km_today: lastMessage.km_today !== undefined ? lastMessage.km_today : a.km_today,
-          battery_level: lastMessage.battery !== undefined ? lastMessage.battery : a.battery_level,
-          orders_today: lastMessage.orders_today !== undefined ? lastMessage.orders_today : a.orders_today
+          km_today: lastMessage.km_today !== undefined ? Number(lastMessage.km_today) : (a.km_today || 0),
+          battery_level: lastMessage.battery !== undefined ? Number(lastMessage.battery) : (a.battery_level || 100),
+          orders_today: lastMessage.orders_today !== undefined ? Number(lastMessage.orders_today) : (a.orders_today || 0)
         };
       }));
     }

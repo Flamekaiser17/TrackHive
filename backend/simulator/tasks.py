@@ -69,7 +69,7 @@ def simulate_agent_movement(self, agent_id):
     redis_client.geoadd("agents_locations", (new_lng, new_lat, agent.id))
 
     payload = {
-        "type": "tracking_message",
+        "type": "agent_location_update",
         "agent_id": agent.id,
         "agent_name": getattr(agent.user, 'username', f"Agent_{agent.id}"),
         "lat": new_lat,
