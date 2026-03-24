@@ -74,12 +74,8 @@ const Simulator = () => {
     logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [simLogs]);
 
-  useEffect(() => {
-    if (!lastMessage || !isSimulating) return;
-    if (lastMessage.type === 'anomaly_detected') {
-      addSimLog(`CRITICAL: Node Breach @ ${lastMessage.agent_id} | CODE: ${lastMessage.anomaly_type.toUpperCase()}`, 'error');
-    }
-  }, [lastMessage, isSimulating, addSimLog]);
+  // NOTE: anomaly log entries are now handled centrally in FleetContext
+  // to avoid duplicate terminal lines
 
   const handleStart = async () => {
     setLoading(true);
