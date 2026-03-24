@@ -21,14 +21,16 @@ const useWebSocket = () => {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     
-    // Safely derive backend host for WebSockets
-    let backendHost = import.meta.env.VITE_WS_URL;
-    if (!backendHost) {
-      const apiBase = import.meta.env.VITE_API_URL || window.location.origin;
-      backendHost = apiBase.replace(/^http/, 'ws');
+    // Safely derive backend host for WebSockets with protocol awareness
+    let wsHost = import.meta.env.VITE_WS_URL;
+    if (!wsHost) {
+      const apiURL = import.meta.env.VITE_API_URL || window.location.origin;
+      wsHost = apiURL.replace(/^http/, 'ws');
     }
     
-    const url = `${backendHost}/ws/admin/?token=${token}`;
+    // Ensure no trailing slash issues
+    const cleanHost = wsHost.endsWith('/') ? wsHost.slice(0, -1) : wsHost;
+    const url = `${cleanHost}/ws/admin/?token=${token}`;
     const ws = new WebSocket(url);
 
     ws.onopen = () => {
@@ -59,6 +61,7 @@ const useWebSocket = () => {
 
     ws.onerror = (error) => {
       console.error('WS_SOCKET_ERROR: Connection failed on the simulation cluster.', error);
+      ws.close(); // Triggers onclose for the retry loop
     };
 
     wsRef.current = ws;
