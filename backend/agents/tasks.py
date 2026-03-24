@@ -2,23 +2,15 @@ from celery import shared_task
 
 @shared_task
 def sync_fatigue_to_db():
-    # IMPORTS ANDAR
     from .models import DeliveryAgent
-    from core.redis_client import redis_client
-
-    agents = DeliveryAgent.objects.all()
+    # Standard sync DB query in Celery task
+    agents = DeliveryAgent.objects.select_related('user').all()
     for agent in agents:
-        data = redis_client.hgetall(f"agent:fatigue:{agent.id}")
-        if data:
-            agent.fatigue_score = float(data.get('score', 0))
-            agent.orders_last_4hrs = int(data.get('orders_last_4hrs', 0))
-            agent.total_km_today = float(data.get('km_today', 0))
-            agent.hours_active = float(data.get('hours_active', 0))
-            agent.save()
+        agent.calculate_fatigue()
+        agent.save(update_fields=['fatigue_score'])
 
 @shared_task
 def reset_fatigue_scores():
-    # IMPORTS ANDAR
     from .models import DeliveryAgent
     from core.redis_client import redis_client
 

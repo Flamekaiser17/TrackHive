@@ -12,6 +12,7 @@ from anomaly.tasks import detect_anomalies_task
 from orders.models import Order
 from orders.eta_service import calculate_and_push_eta
 from django.conf import settings
+from django.utils import timezone
 
 logger = logging.getLogger('trackhive.simulator')
 
@@ -35,9 +36,10 @@ def simulate_agent_movement(self, agent_id):
     new_lat = random.uniform(bounds["lat_min"], bounds["lat_max"])
     new_lng = random.uniform(bounds["lng_min"], bounds["lng_max"])
     
+    distance = 0.0
     if old_lat and old_lng:
-        dist = math.sqrt((new_lat - old_lat)**2 + (new_lng - old_lng)**2) * 111
-        agent.total_km_today += dist
+        distance = math.sqrt((new_lat - old_lat)**2 + (new_lng - old_lng)**2) * 111
+        agent.total_km_today += distance
     
     agent.battery_level = max(5.0, agent.battery_level - random.uniform(0.1, 0.3))
     if random.random() < 0.05:
@@ -54,19 +56,18 @@ def simulate_agent_movement(self, agent_id):
     )
     redis_client.geoadd("agents_locations", (new_lng, new_lat, agent.id))
 
+    # EXACT PAYLOAD REQUIRED BY FRONTEND:
     payload = {
         "type": "tracking_message",
         "data": {
             "agent_id": agent.id,
-            "agent_name": getattr(agent.user, 'username', f"Agent_{agent.id}"),
             "lat": new_lat,
             "lng": new_lng,
-            "speed": speed,
-            "battery": agent.battery_level,
-            "km_today": agent.total_km_today,
-            "orders_today": agent.orders_last_4hrs,
+            "speed": round(speed, 1),
+            "distance": round(agent.total_km_today, 2),
+            "status": agent.status,
             "fatigue_score": agent.fatigue_score,
-            "status": agent.status
+            "timestamp": timezone.now().isoformat()
         }
     }
     if channel_layer:
