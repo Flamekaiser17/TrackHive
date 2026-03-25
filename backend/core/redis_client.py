@@ -1,12 +1,13 @@
+import os
 import redis
-from django.conf import settings
 
-# ISSUE 1: Connection Pool with retry logic for production stability
+# Use REDIS_URL from environment for both Render and local Docker
+REDIS_URL = os.environ.get('REDIS_URL', 'redis://redis:6379/1')
+
 connection_pool = redis.ConnectionPool.from_url(
-    settings.REDIS_URL,
+    REDIS_URL,
     max_connections=20,
     socket_keepalive=True,
-    socket_keepalive_options={},
     retry_on_timeout=True,
     health_check_interval=30,
 )
