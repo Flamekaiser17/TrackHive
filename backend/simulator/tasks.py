@@ -51,27 +51,29 @@ def simulate_agent_movement(self, agent_id):
     agent.current_speed = speed
     agent.save()
 
-    loc_update = LocationUpdate.objects.create(
+    LocationUpdate.objects.create(
         agent=agent, lat=new_lat, lng=new_lng, speed_kmph=speed
     )
     redis_client.geoadd("agents_locations", (new_lng, new_lat, agent.id))
 
-    # EXACT PAYLOAD REQUIRED BY FRONTEND:
-    payload = {
-        "type": "tracking_message",
-        "data": {
-            "agent_id": agent.id,
-            "lat": new_lat,
-            "lng": new_lng,
-            "speed": round(speed, 1),
-            "distance": round(agent.total_km_today, 2),
-            "status": agent.status,
-            "fatigue_score": agent.fatigue_score,
-            "timestamp": timezone.now().isoformat()
-        }
-    }
+    # ISSUE 2: EXACT PAYLOAD WITH CASTING FOR FRONTEND SYNC
     if channel_layer:
-        async_to_sync(channel_layer.group_send)("admins", payload)
+        async_to_sync(channel_layer.group_send)(
+            "admins", # Keep "admins" since consumers join this group
+            {
+                "type": "tracking_message",
+                "data": {
+                    "agent_id": agent.id,
+                    "lat": float(new_lat),
+                    "lng": float(new_lng),
+                    "speed": round(float(speed), 1),
+                    "distance": round(float(agent.total_km_today), 2),
+                    "status": agent.status,
+                    "fatigue_score": float(agent.fatigue_score),
+                    "timestamp": timezone.now().isoformat()
+                }
+            }
+        )
 
     active_order = Order.objects.filter(agent=agent, status__in=['picked_up', 'in_transit']).first()
     detect_anomalies_task.delay(agent.id, new_lat, new_lng, speed, order_id=active_order.id if active_order else None)

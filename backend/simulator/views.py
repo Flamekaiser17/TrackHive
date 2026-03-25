@@ -20,60 +20,68 @@ class SimulateStartView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
-        agent_count = request.data.get('agent_count', 50)
-        order_count = request.data.get('order_count', 200)
+        try:
+            agent_count = request.data.get('agent_count', 50)
+            order_count = request.data.get('order_count', 200)
 
-        # 1. Start simulation for EXISTING (seeded) agents first
-        existing_agents = DeliveryAgent.objects.filter(is_simulated=False)
-        for agent in existing_agents:
-            task = simulate_agent_movement.delay(agent.id)
-            redis_client.sadd("simulation:active_tasks", task.id)
-            # Temporarily mark as simulated so they are cleaned up or handled correctly
-            agent.is_simulated = True 
-            agent.save()
+            # 1. Start simulation for EXISTING (seeded) agents first
+            existing_agents = DeliveryAgent.objects.filter(is_simulated=False)
+            for agent in existing_agents:
+                task = simulate_agent_movement.delay(agent.id)
+                redis_client.sadd("simulation:active_tasks", task.id)
+                # Temporarily mark as simulated so they are cleaned up or handled correctly
+                agent.is_simulated = True 
+                agent.save()
 
-        # 2. Create NEW simulated agents as requested
-        for i in range(agent_count):
-            uid = random.randint(1000, 9999)
-            username = f'sim_agent_{i}_{uid}'
-            user = User.objects.create(
-                username=username, 
-                email=f"{username}@trackhive.com",
-                role='agent'
-            )
-            agent = DeliveryAgent.objects.create(
-                user=user,
-                status='available',
-                current_lat=CITY_CONFIG["lat"] + random.uniform(-0.05, 0.05),
-                current_lng=CITY_CONFIG["lng"] + random.uniform(-0.05, 0.05),
-                is_simulated=True
-            )
-            task = simulate_agent_movement.delay(agent.id)
-            redis_client.sadd("simulation:active_tasks", task.id)
+            # 2. Create NEW simulated agents as requested
+            for i in range(agent_count):
+                uid = random.randint(1000, 9999)
+                username = f'sim_agent_{i}_{uid}'
+                user = User.objects.create(
+                    username=username, 
+                    email=f"{username}@trackhive.com",
+                    role='agent'
+                )
+                agent = DeliveryAgent.objects.create(
+                    user=user,
+                    status='available',
+                    current_lat=CITY_CONFIG["lat"] + random.uniform(-0.05, 0.05),
+                    current_lng=CITY_CONFIG["lng"] + random.uniform(-0.05, 0.05),
+                    is_simulated=True
+                )
+                task = simulate_agent_movement.delay(agent.id)
+                redis_client.sadd("simulation:active_tasks", task.id)
 
-        for j in range(order_count):
-            uid = random.randint(100, 999)
-            customer_name = f'sim_customer_{j}_{uid}'
-            customer, _ = User.objects.get_or_create(
-                username=customer_name,
-                defaults={
-                    'role': 'customer',
-                    'email': f"{customer_name}@trackhive.com"
-                }
-            )
-            Order.objects.create(
-                customer=customer,
-                pickup_lat=CITY_CONFIG["lat"] + random.uniform(-0.08, 0.08),
-                pickup_lng=CITY_CONFIG["lng"] + random.uniform(-0.08, 0.08),
-                drop_lat=CITY_CONFIG["lat"] + random.uniform(-0.1, 0.1),
-                drop_lng=CITY_CONFIG["lng"] + random.uniform(-0.1, 0.1),
-                status='created'
-            )
+            for j in range(order_count):
+                uid = random.randint(100, 999)
+                customer_name = f'sim_customer_{j}_{uid}'
+                customer, _ = User.objects.get_or_create(
+                    username=customer_name,
+                    defaults={
+                        'role': 'customer',
+                        'email': f"{customer_name}@trackhive.com"
+                    }
+                )
+                Order.objects.create(
+                    customer=customer,
+                    pickup_lat=CITY_CONFIG["lat"] + random.uniform(-0.08, 0.08),
+                    pickup_lng=CITY_CONFIG["lng"] + random.uniform(-0.08, 0.08),
+                    drop_lat=CITY_CONFIG["lat"] + random.uniform(-0.1, 0.1),
+                    drop_lng=CITY_CONFIG["lng"] + random.uniform(-0.1, 0.1),
+                    status='created'
+                )
 
-        return Response({
-            "status": "success",
-            "message": f"Simulator started with {agent_count} agents."
-        })
+            return Response({
+                "status": "success",
+                "message": f"Simulator started with {agent_count} agents."
+            })
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return Response(
+                {"status": "error", "message": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class SimulateStopView(APIView):
