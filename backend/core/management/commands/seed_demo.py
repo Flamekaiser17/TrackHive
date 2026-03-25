@@ -18,6 +18,22 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write("🏗️ Ensuring TrackHive Admin & Demo data...")
         
+        from django.contrib.auth import get_user_model
+        from agents.models import DeliveryAgent
+        User = get_user_model()
+
+        # Cleanup leftover sim data from previous aborted or parallel runs
+        User.objects.filter(username__startswith='sim_agent_').delete()
+        User.objects.filter(username__startswith='sim_customer_').delete()
+
+        DeliveryAgent.objects.all().update(
+            fatigue_score=0,
+            total_km_today=0,
+            orders_last_4hrs=0,
+            hours_active=0
+        )
+        print("Cleanup done — sim agents removed, fatigue reset")
+        
         # 2. Create or Update Admin
         admin, created = User.objects.get_or_create(
             email='admin@trackhive.com',
