@@ -64,26 +64,38 @@ def simulate_agent_movement(self, agent_id):
     )
     redis_client.geoadd("agents_locations", (new_lng, new_lat, agent.id))
 
+    # --- TASK 1 & 2: UPDATE REDIS CACHE CORRECTLY ---
+    payload_data = {
+        "agent_id": agent.id,
+        "agent_name": agent.user.username if hasattr(agent, 'user') and agent.user else f"Agent_{agent.id}",
+        "lat": float(new_lat),
+        "lng": float(new_lng),
+        "speed": round(float(speed), 1),
+        "speed_kmph": round(float(speed), 1),
+        "battery": getattr(agent, 'battery_level', 100),
+        "distance": round(float(agent.total_km_today), 2),
+        "km_today": round(float(agent.total_km_today), 2),
+        "status": agent.status,
+        "fatigue_score": float(agent.fatigue_score),
+        "orders_today": int(agent.orders_last_4hrs),
+        "timestamp": timezone.now().isoformat()
+    }
+    
+    try:
+        import json
+        import redis
+        r = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
+        r.hset("fleet_agents", str(agent.id), json.dumps(payload_data))
+    except Exception as e:
+        logger.error(f"Redis Cache Error in Simulator: {e}")
+
     # Broadcast full telemetry to admins group for frontend Activity Stream
     if channel_layer:
         async_to_sync(channel_layer.group_send)(
             "admins",
             {
                 "type": "tracking_message",
-                "data": {
-                    "agent_id": agent.id,
-                    "agent_name": agent.user.username if hasattr(agent, 'user') and agent.user else f"Agent_{agent.id}",
-                    "lat": float(new_lat),
-                    "lng": float(new_lng),
-                    "speed": round(float(speed), 1),
-                    "speed_kmph": round(float(speed), 1),
-                    "distance": round(float(agent.total_km_today), 2),
-                    "km_today": round(float(agent.total_km_today), 2),
-                    "status": agent.status,
-                    "fatigue_score": float(agent.fatigue_score),
-                    "orders_today": int(agent.orders_last_4hrs),
-                    "timestamp": timezone.now().isoformat()
-                }
+                "data": payload_data
             }
         )
 
