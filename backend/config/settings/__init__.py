@@ -97,7 +97,7 @@ CHANNEL_LAYERS = {
     'default': {
         'BACKEND': 'channels_redis.core.RedisChannelLayer',
         'CONFIG': {
-            "hosts": [os.environ.get('REDIS_URL', 'redis://redis:6379/1')],
+            "hosts": [os.environ.get('REDIS_URL')],
             "capacity": 1500,
             "expiry": 10,
         },
@@ -110,9 +110,7 @@ CELERY_BROKER_CONNECTION_MAX_RETRIES = 10
 import dj_database_url
 DATABASES = {
     'default': dj_database_url.config(
-        default='postgres://postgres:postgres@db:5432/trackhive',
-        conn_max_age=600,
-        ssl_require=os.environ.get('DB_SSL_REQUIRE', 'False').lower() == 'true'
+        default=os.environ.get("DATABASE_URL")
     )
 }
 
@@ -148,8 +146,8 @@ SIMPLE_JWT = {
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
-CELERY_BROKER_URL = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
-CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL', 'redis://redis:6379/0')
+CELERY_BROKER_URL = os.environ.get('REDIS_URL')
+CELERY_RESULT_BACKEND = os.environ.get('REDIS_URL')
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True

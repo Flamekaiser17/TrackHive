@@ -20,11 +20,7 @@ SECURE_HSTS_PRELOAD = True
 
 # Database
 DATABASES = {
-    'default': dj_database_url.config(
-        default=os.environ.get('DATABASE_URL'),
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
+    "default": dj_database_url.config(default=os.environ.get("DATABASE_URL"))
 }
 
 # Static Files
@@ -33,7 +29,7 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Redis/Channels/Celery
-REDIS_URL = os.environ.get('REDIS_URL', 'redis://localhost:6379/1')
+REDIS_URL = os.environ.get("REDIS_URL")
 
 CHANNEL_LAYERS = {
     "default": {
