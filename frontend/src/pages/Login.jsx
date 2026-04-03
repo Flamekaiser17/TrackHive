@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { LogIn, Mail, Lock, AlertTriangle, Hexagon, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { loginUser } from '../api/endpoints';
+import { loginUser, exploreDemo } from '../api/endpoints';
 
 /* ── Animated grid background dots ─────────────────────────── */
 const GridBg = () => (
@@ -125,6 +125,7 @@ const Login = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -146,6 +147,18 @@ const Login = ({ onLogin }) => {
         'Cannot connect to server.'
       );
       setLoading(false);
+    }
+  };
+
+  const handleDemo = async () => {
+    setError('');
+    setDemoLoading(true);
+    try {
+      await exploreDemo();
+      if (onLogin) onLogin();
+    } catch (err) {
+      setError('Demo login failed. Cannot connect to server.');
+      setDemoLoading(false);
     }
   };
 
@@ -288,6 +301,50 @@ const Login = ({ onLogin }) => {
             )}
           </motion.button>
         </form>
+
+        <div style={{ margin: '24px 0', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
+          <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-faint)', letterSpacing: '0.05em' }}>OR</span>
+          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.1)' }} />
+        </div>
+
+        {/* Demo Button */}
+        <motion.button
+          onClick={handleDemo}
+          disabled={demoLoading || loading}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
+          style={{
+            width: '100%',
+            height: 52,
+            background: 'rgba(255,165,2,0.1)',
+            border: '1.5px solid rgba(255,165,2,0.3)',
+            borderRadius: 'var(--radius-md)',
+            color: '#FFA502',
+            fontSize: 14,
+            fontWeight: 800,
+            cursor: (demoLoading || loading) ? 'not-allowed' : 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            letterSpacing: '0.04em',
+            fontFamily: 'Inter, sans-serif',
+          }}
+        >
+          {demoLoading ? (
+            <>
+              <motion.div
+                animate={{ rotate: 360 }}
+                transition={{ duration: 0.8, repeat: Infinity, ease: 'linear' }}
+                style={{ width: 16, height: 16, borderRadius: '50%', border: '2px solid rgba(255,165,2,0.3)', borderTopColor: '#FFA502' }}
+              />
+              Loading Demo…
+            </>
+          ) : (
+            <>
+              <Zap size={17} />
+              🚀 Explore Demo
+            </>
+          )}
+        </motion.button>
 
         {/* Footer */}
         <p style={{

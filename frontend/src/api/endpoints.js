@@ -15,6 +15,15 @@ export const loginUser = async (email, password) => {
   return response.data;
 };
 
+export const exploreDemo = async () => {
+  // Call the new idempotent fast-login endpoint
+  const response = await client.post('/demo/');
+  const { access, refresh } = response.data;
+  localStorage.setItem('access_token', access);
+  localStorage.setItem('refresh_token', refresh);
+  return response.data;
+};
+
 export const getProfile = async () => {
   const response = await client.get('/api/auth/profile/');
   return response.data;
