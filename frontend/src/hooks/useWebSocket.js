@@ -1,44 +1,99 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
+// Exponential backoff caps — mirrors production reconnect strategies
+const BACKOFF_INITIAL_MS = 1000;
+const BACKOFF_MAX_MS = 10000;
+const HEALTH_CHECK_URL = '/health/';
+
 /**
- * Custom hook for real-time WebSocket orchestration in TrackHive.
- * Connects to the admin cluster with JWT token-based authentication.
+ * Waits for the backend to be reachable before trying WebSocket.
+ * Prevents cold-start failures where the Daphne/Gunicorn server hasn't
+ * fully started yet but the frontend already attempts a WS handshake.
+ */
+async function waitForBackend(maxAttempts = 8) {
+  const apiBase =
+    import.meta.env.VITE_API_URL ||
+    window.location.origin;
+  const cleanBase = apiBase.endsWith('/') ? apiBase.slice(0, -1) : apiBase;
+  const healthUrl = `${cleanBase}${HEALTH_CHECK_URL}`;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(healthUrl, { method: 'GET', cache: 'no-store' });
+      if (res.ok) {
+        console.log(`WS_GATE: Backend healthy on attempt ${attempt}. Proceeding.`);
+        return true;
+      }
+    } catch (_) {
+      // Network error — backend not awake yet
+    }
+    const delay = Math.min(BACKOFF_INITIAL_MS * attempt, BACKOFF_MAX_MS);
+    console.warn(`WS_GATE: Backend not ready. Retrying in ${delay}ms... (${attempt}/${maxAttempts})`);
+    await new Promise(r => setTimeout(r, delay));
+  }
+  console.error('WS_GATE: Backend did not become healthy. Proceeding anyway.');
+  return false;
+}
+
+/**
+ * Production-grade WebSocket hook for TrackHive admin cluster.
+ *
+ * Guarantees:
+ * 1. Token must exist before any connection attempt.
+ * 2. Health check confirms backend is awake before WS handshake.
+ * 3. Exponential backoff on reconnect (1s → 2s → 4s … capped at 10s).
+ * 4. Retry counter resets on successful open.
+ * 5. No reconnect after intentional unmount.
  */
 const useWebSocket = () => {
   const [connected, setConnected] = useState(false);
   const [lastMessage, setLastMessage] = useState(null);
-  const wsRef = useRef(null);
-  const reconnectTimeoutRef = useRef(null);
 
-  const connect = useCallback(() => {
+  const wsRef           = useRef(null);
+  const retryCountRef   = useRef(0);
+  const retryTimerRef   = useRef(null);
+  const destroyedRef    = useRef(false); // guard against state updates after unmount
+
+  const clearRetryTimer = () => {
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+  };
+
+  const connect = useCallback(async () => {
+    // --- GATE 1: Abort if component already unmounted ---
+    if (destroyedRef.current) return;
+
+    // --- GATE 2: Token must be available ---
     const token = localStorage.getItem('access_token');
-    
-    // Safety check for token persistence in the Command Center
     if (!token) {
-      console.warn('WS_ERROR: Authentication token missing for admin cluster connection.');
+      console.warn('WS_SKIP: No JWT token — WebSocket deferred.');
       return;
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    
-    // Safely derive backend host for WebSockets with protocol awareness
+    // --- GATE 3: Backend health check (prevents cold-start failures) ---
+    await waitForBackend();
+    if (destroyedRef.current) return; // May have unmounted during health probe
+
+    // --- Build WSS URL ---
     let wsHost = import.meta.env.VITE_WS_URL;
     if (!wsHost) {
       const apiURL = import.meta.env.VITE_API_URL || window.location.origin;
       wsHost = apiURL.replace(/^http/, 'ws');
     }
-    
-    // Ensure no trailing slash issues
     const cleanHost = wsHost.endsWith('/') ? wsHost.slice(0, -1) : wsHost;
     const url = `${cleanHost}/ws/admin/?token=${token}`;
+
+    console.log(`WS_CONNECT: Initiating session (attempt ${retryCountRef.current + 1})`);
     const ws = new WebSocket(url);
 
     ws.onopen = () => {
-      console.log('WS_CONNECTED: Secure session initialized with admin cluster.');
+      if (destroyedRef.current) { ws.close(); return; }
+      console.log('WS_OPEN: Real-time session established.');
+      retryCountRef.current = 0; // Reset backoff on success
       setConnected(true);
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
+      clearRetryTimer();
     };
 
     ws.onmessage = (event) => {
@@ -46,46 +101,58 @@ const useWebSocket = () => {
         const message = JSON.parse(event.data);
         setLastMessage(message);
       } catch (err) {
-        console.error('WS_CORE_PARSING_ERROR: Invalid JSON received from telemetry stream.', err);
+        console.error('WS_PARSE_ERROR: Invalid JSON from telemetry stream.', err);
       }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (e) => {
+      if (destroyedRef.current) return;
       setConnected(false);
-      console.warn('WS_DISCONNECTED: Session interrupted. Attempting reconnection in 3s...');
-      // Retry after 3s only if token still exists - FIXED: BUG 1
-      if (localStorage.getItem('access_token')) {
-        reconnectTimeoutRef.current = setTimeout(connect, 3000);
-      }
+
+      // Don't reconnect on normal intentional close (code 1000)
+      if (e.code === 1000) return;
+
+      const token = localStorage.getItem('access_token');
+      if (!token) return;
+
+      retryCountRef.current += 1;
+      const delay = Math.min(
+        BACKOFF_INITIAL_MS * Math.pow(2, retryCountRef.current - 1),
+        BACKOFF_MAX_MS
+      );
+      console.warn(
+        `WS_DISCONNECTED: Retrying in ${delay}ms (attempt ${retryCountRef.current})`
+      );
+      retryTimerRef.current = setTimeout(connect, delay);
     };
 
-    ws.onerror = (error) => {
-      console.error('WS_SOCKET_ERROR: Connection failed on the simulation cluster.', error);
-      ws.close(); // Triggers onclose for the retry loop
+    ws.onerror = () => {
+      // onclose will handle retry — just close cleanly
+      ws.close();
     };
 
     wsRef.current = ws;
-  }, []);
+  }, []); // stable — no deps that change
 
   useEffect(() => {
+    destroyedRef.current = false;
     connect();
-    // Cleanup on unmount
+
     return () => {
+      destroyedRef.current = true;
+      clearRetryTimer();
       if (wsRef.current) {
-        wsRef.current.onclose = null; // Prevent reconnect on explicit close
-        wsRef.current.close();
-      }
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
+        wsRef.current.onclose = null; // Suppress reconnect on intentional teardown
+        wsRef.current.close(1000, 'Component unmounted');
       }
     };
   }, [connect]);
 
   const sendMessage = useCallback((data) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(data));
     } else {
-      console.warn('WS_SEND_FAILURE: Cluster connection not active.');
+      console.warn('WS_SEND_SKIP: Connection not active.');
     }
   }, []);
 

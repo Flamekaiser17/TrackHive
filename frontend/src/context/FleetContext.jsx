@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { getAgents, getOrders, getAnomalies } from '../api/endpoints';
 import useWebSocket from '../hooks/useWebSocket';
 
@@ -10,6 +10,10 @@ export const FleetProvider = ({ children }) => {
   const [anomalies, setAnomalies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // wsReady: true once WS connects OR after a max 6s fallback
+  // This gates the UI splash screen in App.jsx
+  const [wsReady, setWsReady] = useState(false);
+  const wsReadyTimerRef = useRef(null);
   
   // Simulation State Persistence
   const [isSimulating, setIsSimulating] = useState(false);
@@ -19,6 +23,23 @@ export const FleetProvider = ({ children }) => {
   ]);
 
   const { connected, lastMessage, sendMessage } = useWebSocket();
+
+  // Mark wsReady when WS connects. Also set a 6s max-wait fallback
+  // so the UI doesn't block forever on an unresponsive WS.
+  useEffect(() => {
+    if (connected && !wsReady) {
+      setWsReady(true);
+      if (wsReadyTimerRef.current) clearTimeout(wsReadyTimerRef.current);
+    }
+  }, [connected, wsReady]);
+
+  useEffect(() => {
+    // Fallback: if WS never connects within 6s, unblock the UI anyway
+    wsReadyTimerRef.current = setTimeout(() => {
+      setWsReady(prev => { if (!prev) console.warn('WS_READY_FALLBACK: Unblocking UI after timeout.'); return true; });
+    }, 6000);
+    return () => clearTimeout(wsReadyTimerRef.current);
+  }, []);
 
   // Unified Fetcher Logic (Production-Grade)
   const fetchData = useCallback(async () => {
@@ -172,6 +193,7 @@ export const FleetProvider = ({ children }) => {
     loading,
     error,
     connected,
+    wsReady,
     sendMessage,
     // Simulation Persistence
     isSimulating,
@@ -181,7 +203,7 @@ export const FleetProvider = ({ children }) => {
     simLogs,
     addSimLog,
     refreshFleet: fetchData,
-    setAnomalies 
+    setAnomalies
   };
 
   return (
