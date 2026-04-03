@@ -22,16 +22,16 @@ export const FleetProvider = ({ children }) => {
     { id: 1, time: '12:45:01', msg: 'Simulator initialized. Awaiting user commands...', type: 'system' }
   ]);
 
-  const { connected, lastMessage, sendMessage } = useWebSocket();
+  const { connected, dataLoaded, lastMessage, sendMessage } = useWebSocket();
 
-  // Mark wsReady when WS connects. Also set a 6s max-wait fallback
+  // Mark wsReady when WS connects AND INITIAL_DATA is loaded. Also set a 6s max-wait fallback
   // so the UI doesn't block forever on an unresponsive WS.
   useEffect(() => {
-    if (connected && !wsReady) {
+    if (connected && dataLoaded && !wsReady) {
       setWsReady(true);
       if (wsReadyTimerRef.current) clearTimeout(wsReadyTimerRef.current);
     }
-  }, [connected, wsReady]);
+  }, [connected, dataLoaded, wsReady]);
 
   useEffect(() => {
     // Fallback: if WS never connects within 6s, unblock the UI anyway
@@ -89,6 +89,16 @@ export const FleetProvider = ({ children }) => {
   // Real-time Pulse Processor (WebSocket)
   useEffect(() => {
     if (!lastMessage) return;
+
+    // 0. Handle INITIAL_DATA snapshot
+    if (lastMessage.type === 'INITIAL_DATA') {
+       const payload = lastMessage.payload || {};
+       if (payload.agents) setAgents(payload.agents);
+       if (payload.orders) setOrders(payload.orders);
+       if (payload.anomalies) setAnomalies(payload.anomalies);
+       setLoading(false);
+       return;
+    }
 
     // 1. Handle Agent Location/Telemetry Updates (upsert — works for both real and sim agents)
     if (

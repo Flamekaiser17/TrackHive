@@ -139,7 +139,79 @@ class AdminConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_discard("admins", self.channel_name)
 
     async def receive(self, text_data):
-        pass  # Admin only receives, doesn't send
+        try:
+            data = json.loads(text_data)
+        except (json.JSONDecodeError, TypeError):
+            return
+
+        # Handle explicit re-fetch requests (e.g. after tab focus restore)
+        if data.get("type") == "INIT_FETCH":
+            snapshot = await self.get_initial_snapshot()
+            await self.send(text_data=json.dumps({
+                "type": "INITIAL_DATA",
+                "payload": snapshot
+            }))
+
+    @database_sync_to_async
+    def get_initial_snapshot(self):
+        """
+        Synchronous DB read returning full fleet state as a dict.
+        Runs in a thread pool via database_sync_to_async.
+        No Celery, no delays — plain ORM reads.
+        """
+        from agents.models import DeliveryAgent
+        from orders.models import Order
+        from anomaly.models import AnomalyLog
+
+        agents = list(
+            DeliveryAgent.objects.select_related('user')
+            .values(
+                'id', 'current_lat', 'current_lng', 'current_speed',
+                'battery_level', 'total_km_today', 'orders_last_4hrs',
+                'fatigue_score', 'status', 'user__username'
+            )
+        )
+        # Normalize field names to match what the frontend expects
+        normalized_agents = [
+            {
+                'id': a['id'],
+                'lat': a['current_lat'],
+                'lng': a['current_lng'],
+                'speed': a['current_speed'] or 0,
+                'battery_level': a['battery_level'] or 100,
+                'km_today': a['total_km_today'] or 0,
+                'orders_today': a['orders_last_4hrs'] or 0,
+                'fatigue_score': a['fatigue_score'] or 0,
+                'status': a['status'],
+                'username': a['user__username'] or f"Agent_{a['id']}",
+            }
+            for a in agents
+        ]
+
+        orders = list(
+            Order.objects.values(
+                'id', 'status', 'pickup_lat', 'pickup_lng',
+                'drop_lat', 'drop_lng', 'created_at'
+            )
+        )
+        # Serialize datetimes
+        for o in orders:
+            if o.get('created_at'):
+                o['created_at'] = o['created_at'].isoformat()
+
+        anomalies = list(
+            AnomalyLog.objects.filter(resolved=False)
+            .values('id', 'agent_id', 'anomaly_type', 'detected_at', 'resolved')
+        )
+        for a in anomalies:
+            if a.get('detected_at'):
+                a['detected_at'] = a['detected_at'].isoformat()
+
+        return {
+            "agents": normalized_agents,
+            "orders": orders,
+            "anomalies": anomalies,
+        }
 
     async def tracking_message(self, event):
         # Synchronized telemetry mapper

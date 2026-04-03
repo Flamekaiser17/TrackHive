@@ -7,8 +7,6 @@ const HEALTH_CHECK_URL = '/health/';
 
 /**
  * Waits for the backend to be reachable before trying WebSocket.
- * Prevents cold-start failures where the Daphne/Gunicorn server hasn't
- * fully started yet but the frontend already attempts a WS handshake.
  */
 async function waitForBackend(maxAttempts = 8) {
   const apiBase =
@@ -36,17 +34,15 @@ async function waitForBackend(maxAttempts = 8) {
 }
 
 /**
- * Production-grade WebSocket hook for TrackHive admin cluster.
- *
- * Guarantees:
- * 1. Token must exist before any connection attempt.
- * 2. Health check confirms backend is awake before WS handshake.
- * 3. Exponential backoff on reconnect (1s → 2s → 4s … capped at 10s).
- * 4. Retry counter resets on successful open.
- * 5. No reconnect after intentional unmount.
+ * Production-grade WebSocket hook.
+ * Exposes:
+ *   connected   — true once WS handshake completes
+ *   dataLoaded  — true once the first INITIAL_DATA snapshot arrives
+ *   lastMessage — most recent parsed message (all types)
  */
 const useWebSocket = () => {
   const [connected, setConnected] = useState(false);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [lastMessage, setLastMessage] = useState(null);
 
   const wsRef           = useRef(null);
@@ -91,6 +87,10 @@ const useWebSocket = () => {
     ws.onopen = () => {
       if (destroyedRef.current) { ws.close(); return; }
       console.log('WS_OPEN: Real-time session established.');
+      
+      // Explicitly request initial data snapshot to bypass REST latency
+      ws.send(JSON.stringify({ type: 'INIT_FETCH' }));
+
       retryCountRef.current = 0; // Reset backoff on success
       setConnected(true);
       clearRetryTimer();
@@ -99,6 +99,10 @@ const useWebSocket = () => {
     ws.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data);
+        // Flag dataLoaded the moment the initial snapshot arrives
+        if (message.type === 'INITIAL_DATA') {
+          setDataLoaded(true);
+        }
         setLastMessage(message);
       } catch (err) {
         console.error('WS_PARSE_ERROR: Invalid JSON from telemetry stream.', err);
@@ -156,7 +160,7 @@ const useWebSocket = () => {
     }
   }, []);
 
-  return { connected, lastMessage, sendMessage };
+  return { connected, dataLoaded, lastMessage, sendMessage };
 };
 
 export default useWebSocket;
