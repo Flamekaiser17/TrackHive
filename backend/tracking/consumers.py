@@ -161,6 +161,14 @@ class AdminConsumer(AsyncWebsocketConsumer):
         if data.get("type") == "INIT_FETCH":
             # Direct cache fetch - no DB/Celery execution
             snapshot = await self.get_initial_snapshot()
+
+            # --- S3 SNAPSHOT ARCHIVING ---
+            try:
+                from utils.s3 import upload_snapshot_to_s3
+                upload_snapshot_to_s3(snapshot)
+            except Exception as e:
+                logger.error(f"S3_UPLOAD_TRIGGER_FAILED: {e}")
+
             await self.send(text_data=json.dumps({
                 "type": "INITIAL_DATA",
                 "payload": snapshot
